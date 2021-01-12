@@ -352,6 +352,10 @@ async fn add_labels(
         })
         .collect();
 
+    if to_add.is_empty() {
+        return Ok(());
+    }
+
     let ih = client_request!(client, issues);
 
     ih.add_labels(pr_number, &to_add)
