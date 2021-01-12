@@ -34,19 +34,14 @@ async fn real_main() -> Result<(), Error> {
     let client = octobors::context::Client::new(client)?;
     let config = process::Config::deserialize()?;
 
+    log::debug!("configuration: {:?}", config);
+
     process::process_event(client, action_event, config).await?;
 
     Ok(())
 }
 
 fn hook_logger() -> Result<(), Error> {
-    let global_level = std::env::var("ACTIONS_STEP_DEBUG")
-        .map(|val| match val.as_str() {
-            "true" | "1" => log::LevelFilter::Debug,
-            _ => log::LevelFilter::Info,
-        })
-        .unwrap_or(log::LevelFilter::Info);
-
     fern::Dispatch::new()
         .format(|out, message, record| {
             let command = match record.level() {
@@ -61,7 +56,9 @@ fn hook_logger() -> Result<(), Error> {
 
             out.finish(format_args!("::{}::{}", command, message))
         })
-        .level_for("octobors", global_level)
+        // The actions UI will automatically filter out debug level events unless
+        // the user has configured their workflow for debugging
+        .level_for("octobors", log::LevelFilter::Debug)
         .chain(std::io::stdout())
         // Apply globally
         .apply()
