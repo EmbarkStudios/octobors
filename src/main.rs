@@ -56,6 +56,7 @@ fn hook_logger() -> Result<(), Error> {
 
             out.finish(format_args!("::{}::{}", command, message))
         })
+        .level(log::LevelFilter::Warn)
         // The actions UI will automatically filter out debug level events unless
         // the user has configured their workflow for debugging
         .level_for("octobors", log::LevelFilter::Debug)

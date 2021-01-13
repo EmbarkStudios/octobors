@@ -289,6 +289,10 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     remove_labels(client, pr_number, &mut labels, &labels_to_remove).await?;
 
     if get_mergeable_state(pr_number, &labels, &cfg) {
+        log::warn!(
+            "PR #{} has met all automerge requirements, queuing for merge...",
+            pr_number
+        );
         crate::merge::queue(&client, pr.pr, &cfg).await?;
     }
 
