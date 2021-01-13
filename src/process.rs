@@ -64,7 +64,7 @@ impl Config {
                 }
             })?,
             reviewed_label: read_input("reviewed-label").ok().filter(|label| !label.is_empty()),
-            block_merge_label: read_input("block_merge_label").ok().filter(|label| !label.is_empty()),
+            block_merge_label: read_input("block-merge-label").ok().filter(|label| !label.is_empty()),
             automerge_grace_period: read_input("automerge-grace-period")
                 .and_then(|gp| {
                     if gp.is_empty() {
