@@ -286,7 +286,12 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     add_labels(client, pr_number, &mut labels, &labels_to_add).await?;
     remove_labels(client, pr_number, &mut labels, &labels_to_remove).await?;
 
-    if get_mergeable_state(pr_number, &labels, &cfg) {
+    if matches!(pr.trigger, EventTrigger::Status { .. }) {
+        log::info!(
+            "PR#{} was a status update, appropriate labels have been added or removed",
+            pr_number
+        );
+    } else if get_mergeable_state(pr_number, &labels, &cfg) {
         log::warn!(
             "PR #{} has met all automerge requirements, queuing for merge...",
             pr_number
@@ -458,14 +463,11 @@ async fn on_pr_event(
         PRAction::ReviewRequested | PRAction::ReviewRequestRemoved | PRAction::ReadyForReview => {
             on_review_state_event(client, pr, cfg, merge_state, None).await?;
         }
+        PRAction::Labeled | PRAction::Unlabeled => {
+            log::info!("PR #{} had its labels changed", pr_number);
+        }
         // Events which have no bearing on whether the PR will be automerged
-        PRAction::Assigned
-        | PRAction::Unassigned
-        | PRAction::Labeled
-        | PRAction::Unlabeled
-        | PRAction::Locked
-        | PRAction::Unlocked
-        | _ => {
+        PRAction::Assigned | PRAction::Unassigned | PRAction::Locked | PRAction::Unlocked | _ => {
             log::info!(
                 "PR #{} action '{:?}' has no bearing on automerge",
                 pr_number,
