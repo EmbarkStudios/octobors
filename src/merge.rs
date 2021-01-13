@@ -60,10 +60,11 @@ pub async fn queue(
                     MergeableState::Blocked => {
                         Some("1 or more required checks are pending".to_owned())
                     }
-                    MergeableState::Unstable => {
-                        Some("1 or more required checks have failed".to_owned())
-                    }
-                    MergeableState::Clean | MergeableState::HasHooks => {
+                    // So Github might set the state as "unstable" since the automerge
+                    // action is currently running, but if we got here then the CI
+                    // statuses we actually cared about have all passed, so we should
+                    // be ok
+                    MergeableState::Clean | MergeableState::HasHooks | MergeableState::Unstable => {
                         let mut merge = prh
                             .merge(pr_number)
                             .title(pr.title)
