@@ -146,11 +146,14 @@ async fn get_pull_requests(
                     let branch_prs = prh
                         .list()
                         .state(octocrab::params::State::Open)
-                        .head(format!("{}:{}", client.owner, branch))
+                        .head(format!("{}:{}", client.owner, branch.name))
                         .send()
                         .await
                         .with_context(|| {
-                            format!("unable to retrieve pull requests for branch '{}'", branch)
+                            format!(
+                                "unable to retrieve pull requests for branch '{}'",
+                                branch.name
+                            )
                         })?;
 
                     prs.extend(branch_prs.into_iter().map(|pr| PREvent {

@@ -68,10 +68,22 @@ pub struct PullRequestReview {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Commit {
+    pub sha: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Branch {
+    pub name: String,
+    pub protected: bool,
+    pub commit: Commit,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Status {
     pub state: models::StatusState,
     pub context: String,
-    pub branches: Vec<String>,
+    pub branches: Vec<Branch>,
 }
 
 #[derive(Debug)]
