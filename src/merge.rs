@@ -31,49 +31,75 @@ pub async fn queue(
             return Ok(());
         }
 
-        // Github started calculating the merge state of the PR if it hadn't
-        // already done so before our request, so if it didn't finish, we need
-        // to poll it again
-        match pr.mergeable {
-            Some(is_mergeable) => {
-                if !is_mergeable {
-                    log::warn!("Github indicates PR#{} is not mergeable", pr_number);
-                    return Ok(());
-                }
+        use octocrab::models::pulls::MergeableState;
 
-                let mut merge = prh
-                    .merge(pr_number)
-                    .title(pr.title)
-                    .sha(pr.head.sha)
-                    .method(
-                        config
-                            .merge_method
-                            .unwrap_or(octocrab::params::pulls::MergeMethod::Merge),
-                    );
-
-                if let Some(body) = pr.body {
-                    merge = merge.message(body);
-                }
-
-                match merge.send().await {
-                    Ok(res) => {
-                        // Even though the response contains a 'merged' boolean, the API docs
-                        // seem to indicate that this would never be false, so we just assume it merged
-                        log::info!(
-                            "Successfully merged PR#{}: {}",
-                            pr_number,
-                            res.sha.unwrap_or_default()
-                        );
-                    }
-                    Err(err) => {
-                        log::warn!("Failed to merge PR#{}: {:#}", pr_number, err);
-                    }
-                }
-
-                return Ok(());
+        match pr.mergeable_state {
+            Some(MergeableState::Unknown) | None => {
+                // Github started calculating the merge state of the PR if it hadn't
+                // already done so before our request, so if it didn't finish, we need
+                // to poll it again
+                log::warn!("Merge state for PR#{} is unknown, retrying", pr_number);
             }
-            None => {
-                log::info!("Merge state for PR#{} is unknown, retrying", pr_number);
+            Some(ms) => {
+                match ms {
+                    MergeableState::Draft => {
+                        log::warn!("PR#{} is a draft and can't be merged", pr_number,);
+                        return Ok(());
+                    }
+                    MergeableState::Behind | MergeableState::Dirty => {
+                        log::warn!(
+                            "PR#{} is {:?} '{}' and needs to be updated",
+                            pr_number,
+                            ms,
+                            pr.base.ref_field
+                        );
+                        return Ok(());
+                    }
+                    MergeableState::Blocked | MergeableState::Unstable => {
+                        log::warn!(
+                            "PR#{} is blocked from merging by 1 or more pending or failed statuses",
+                            pr_number
+                        );
+                        return Ok(());
+                    }
+                    MergeableState::Clean | MergeableState::HasHooks => {
+                        let mut merge = prh
+                            .merge(pr_number)
+                            .title(pr.title)
+                            .sha(pr.head.sha)
+                            .method(
+                                config
+                                    .merge_method
+                                    .unwrap_or(octocrab::params::pulls::MergeMethod::Merge),
+                            );
+
+                        if let Some(body) = pr.body {
+                            merge = merge.message(body);
+                        }
+
+                        match merge.send().await {
+                            Ok(res) => {
+                                // Even though the response contains a 'merged' boolean, the API docs
+                                // seem to indicate that this would never be false, so we just assume it merged
+                                log::info!(
+                                    "Successfully merged PR#{}: {}",
+                                    pr_number,
+                                    res.sha.unwrap_or_default()
+                                );
+                            }
+                            Err(err) => {
+                                log::warn!("Failed to merge PR#{}: {:#}", pr_number, err);
+                            }
+                        }
+
+                        return Ok(());
+                    }
+                    MergeableState::Unknown => unreachable!(),
+                    _ => {
+                        log::warn!("Ignoring unknown merge state {:?} for PR#{}", ms, pr_number);
+                        return Ok(());
+                    }
+                }
             }
         }
 
