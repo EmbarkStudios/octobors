@@ -544,23 +544,38 @@ async fn on_review_state_event(
 
     let reviews = ph.list_reviews(pr_number).await?;
 
-    let all_reviews_approved = !reviews.is_empty()
-        && reviews.iter().all(|rev| {
-            let is_approved = rev.state == Some(models::pulls::ReviewState::Approved);
+    // We need to keep track of the last dis/approve state for each individual
+    // reviewer, as every state changes is stored in chronological order
+    if reviews.is_empty() {
+        log::debug!("No reviews are available for PR#{}", pr_number);
+        merge_state.reviewed = Some(false);
+    } else {
+        let mut review_states = std::collections::HashMap::new();
+
+        for rev in &reviews {
+            match rev.state {
+                Some(models::pulls::ReviewState::Commented) | None => {
+                    log::debug!("Ignoring comment from '{}'", rev.user.login);
+                }
+                Some(state) => {
+                    review_states.insert(rev.user.id, (&rev.user, state));
+                }
+            }
+        }
+
+        let all_reviews_approved = review_states.into_iter().all(|(_, (user, rev))| {
+            let is_approved = rev == models::pulls::ReviewState::Approved;
 
             if !is_approved {
-                log::debug!(
-                    "Review {} from user '{}' is '{:?}'",
-                    rev.id,
-                    rev.user.login,
-                    rev.state
-                );
+                log::debug!("Latest review from user '{}' is '{:?}'", user.login, rev,);
             }
 
             is_approved
         });
 
-    merge_state.reviewed = Some(all_reviews_approved);
+        merge_state.reviewed = Some(all_reviews_approved);
+    }
+
     Ok(())
 }
 
