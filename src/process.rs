@@ -204,7 +204,7 @@ pub async fn process_event(
 struct MergeState {
     needs_description: Option<bool>,
     ci_passed: Option<bool>,
-    waiting_on_review: Option<bool>,
+    reviewed: Option<bool>,
 }
 
 async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Result<(), Error> {
@@ -228,7 +228,7 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     let mut merge_state = MergeState {
         needs_description: None,
         ci_passed: None,
-        waiting_on_review: None,
+        reviewed: None,
     };
 
     match &pr.trigger {
@@ -266,13 +266,11 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     }
 
     // Check the review state
-    if let (Some(waiting_on_review), Some(label)) =
-        (merge_state.waiting_on_review, &cfg.reviewed_label)
-    {
-        if waiting_on_review {
-            labels_to_remove.push(label);
-        } else {
+    if let (Some(reviewed), Some(label)) = (merge_state.reviewed, &cfg.reviewed_label) {
+        if reviewed {
             labels_to_add.push(label);
+        } else {
+            labels_to_remove.push(label);
         }
     }
 
@@ -323,8 +321,8 @@ pub fn get_mergeable_state(pr_number: u64, labels: &[String], cfg: &Config) -> b
         }
     }
 
-    if let Some(waiting_for_review_label) = &cfg.reviewed_label {
-        if has_label(labels, waiting_for_review_label).is_none() {
+    if let Some(reviewed_label) = &cfg.reviewed_label {
+        if has_label(labels, reviewed_label).is_none() {
             log::info!("PR #{} needs 1 or more review approvals", pr_number);
 
             return false;
@@ -494,8 +492,6 @@ async fn on_review_state_event(
     // If reviews aren't required, then uhh, yah, we're done here
     if cfg.reviewed_label.is_none() {
         log::info!("PR #{} does not require reviews", pr_number,);
-
-        merge_state.waiting_on_review = Some(false);
         return Ok(());
     }
 
@@ -542,16 +538,29 @@ async fn on_review_state_event(
         }
     }
 
+    log::debug!("Checking state of all review for PR#{}", pr_number);
+
     let ph = client_request!(client, pulls);
 
     let reviews = ph.list_reviews(pr_number).await?;
 
     let all_reviews_approved = !reviews.is_empty()
-        && reviews
-            .iter()
-            .all(|rev| rev.state == Some(models::pulls::ReviewState::Approved));
+        && reviews.iter().all(|rev| {
+            let is_approved = rev.state == Some(models::pulls::ReviewState::Approved);
 
-    merge_state.waiting_on_review = Some(!all_reviews_approved);
+            if !is_approved {
+                log::debug!(
+                    "Review {} from user '{}' is '{:?}'",
+                    rev.id,
+                    rev.user.login,
+                    rev.state
+                );
+            }
+
+            is_approved
+        });
+
+    merge_state.reviewed = Some(all_reviews_approved);
     Ok(())
 }
 
