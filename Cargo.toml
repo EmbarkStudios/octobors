@@ -25,5 +25,5 @@ tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 [patch.crates-io]
 # Patch to add a rustls feature. Also includes the latest from octocrab, which
 # includes a bump of reqwest which allows us to use tokio 1.0
-octocrab = { git = "https://github.com/EmbarkStudios/octocrab", rev = "3148025" }
+octocrab = { git = "https://github.com/EmbarkStudios/octocrab", rev = "4a543b9" }
 #octocrab = { path = "../octocrab" }

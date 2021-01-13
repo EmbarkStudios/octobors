@@ -98,7 +98,11 @@ pub fn deserialize_action_context(
         )
     })?;
 
+    log::debug!("Event data: {}", event_data);
+
     let event_name = var("GITHUB_EVENT_NAME").context("failed to read GITHUB_EVENT_NAME")?;
+
+    log::debug!("Action triggered by '{}' event", event_name);
 
     let payload: WebhookPayload = match event_name.as_str() {
         "pull_request" => serde_json::from_str::<PullRequest>(&event_data)

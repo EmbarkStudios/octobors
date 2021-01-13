@@ -356,6 +356,8 @@ async fn add_labels(
         return Ok(());
     }
 
+    log::debug!("Adding labels {:?}", to_add);
+
     let ih = client_request!(client, issues);
 
     ih.add_labels(pr_number, &to_add)
@@ -373,7 +375,7 @@ async fn remove_labels(
     client: &context::Client,
     pr_number: u64,
     labels: &mut Vec<String>,
-    to_remove: impl IntoIterator<Item = impl AsRef<str>>,
+    to_remove: impl IntoIterator<Item = impl AsRef<str> + std::fmt::Debug>,
 ) -> Result<(), Error> {
     // Only remove the label(s) that are actually present
     let to_remove: Vec<_> = to_remove
@@ -386,10 +388,18 @@ async fn remove_labels(
         })
         .collect();
 
+    if to_remove.is_empty() {
+        return Ok(());
+    }
+
+    log::debug!("Removing labels {:?}", to_remove);
+
     let ih = client_request!(client, issues);
 
     for old_label in to_remove {
-        let _ = ih.remove_label(pr_number, old_label).await;
+        if let Err(e) = ih.remove_label(pr_number, old_label.as_ref()).await {
+            log::debug!("Error removing label '{}': {:#}", old_label.as_ref(), e);
+        }
     }
 
     Ok(())
@@ -563,7 +573,7 @@ async fn on_status_event(
     } else {
         let rh = client_request!(client, repos);
         let status = rh
-            .get_combined_status_for_ref(&octocrab::params::repos::Reference::Commit(
+            .combined_status_for_ref(&octocrab::params::repos::Reference::Commit(
                 pr.pr.head.sha.clone(),
             ))
             .await?;

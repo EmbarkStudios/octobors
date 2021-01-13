@@ -66,7 +66,7 @@ pub async fn queue(
                         );
                     }
                     Err(err) => {
-                        log::info!("Failed to merge PR#{}: {:#}", pr_number, err);
+                        log::warn!("Failed to merge PR#{}: {:#}", pr_number, err);
                     }
                 }
 
