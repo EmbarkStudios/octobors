@@ -11,8 +11,8 @@ inputs:
     description: "Label applied when all of the required status checks have passed"
     required: false
     default: "s: ci-passed"
-  waiting-for-review-label:
-    description: "Label applied when no reviewers have been requested, or not all reviews have been approved"
+  reviewed-label:
+    description: "Label applied when all requested reviewers have been accepted"
     required: false
   block-merge-label:
     description: "Label that can be applied manually to block automerges until it is removed"
@@ -34,7 +34,7 @@ runs:
     GITHUB_TOKEN: ${{ inputs.github-token }}
     INPUT_REQUIRED-STATUSES: ${{ inputs.required-statuses }}
     INPUT_CI-PASSED-LABEL: ${{ inputs.ci-passed-label }}
-    INPUT_WAITING-FOR-REVIEW-LABEL: ${{ inputs.waiting-for-review-label }}
+    INPUT_REVIEWED-LABEL: ${{ inputs.waiting-for-review-label }}
     INPUT_BLOCK-MERGE-LABEL: ${{ inputs.block-merge-label }}
     INPUT_AUTOMERGE-GRACE-PERIOD: ${{ inputs.automerge-grace-period }}
     INPUT_MERGE-METHOD: ${{ inputs.merge-method }}

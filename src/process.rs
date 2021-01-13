@@ -12,8 +12,8 @@ pub struct Config {
     pub required_statuses: Vec<String>,
     /// The label applied when all of the PR's required status checks have passed
     pub ci_passed_label: String,
-    /// Label applied when a PR is waiting on one or more reviewers to approve
-    pub waiting_for_review_label: Option<String>,
+    /// Label applied when a PR has 1 or more reviewers and all of them are accepted
+    pub reviewed_label: Option<String>,
     /// Label that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
     /// The period in milliseconds between when a PR can be automerged, and when
@@ -63,7 +63,7 @@ impl Config {
                     Ok(label)
                 }
             })?,
-            waiting_for_review_label: read_input("waiting-for-review-label").ok().filter(|label| !label.is_empty()),
+            reviewed_label: read_input("reviewed-label").ok().filter(|label| !label.is_empty()),
             block_merge_label: read_input("block_merge_label").ok().filter(|label| !label.is_empty()),
             automerge_grace_period: read_input("automerge-grace-period")
                 .and_then(|gp| {
@@ -267,12 +267,12 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
 
     // Check the review state
     if let (Some(waiting_on_review), Some(label)) =
-        (merge_state.waiting_on_review, &cfg.waiting_for_review_label)
+        (merge_state.waiting_on_review, &cfg.reviewed_label)
     {
         if waiting_on_review {
-            labels_to_add.push(label);
-        } else {
             labels_to_remove.push(label);
+        } else {
+            labels_to_add.push(label);
         }
     }
 
@@ -323,8 +323,8 @@ pub fn get_mergeable_state(pr_number: u64, labels: &[String], cfg: &Config) -> b
         }
     }
 
-    if let Some(waiting_for_review_label) = &cfg.waiting_for_review_label {
-        if has_label(labels, waiting_for_review_label).is_some() {
+    if let Some(waiting_for_review_label) = &cfg.reviewed_label {
+        if has_label(labels, waiting_for_review_label).is_none() {
             log::info!("PR #{} needs 1 or more review approvals", pr_number);
 
             return false;
@@ -427,7 +427,7 @@ async fn on_pr_event(
         // Event that can change the waiting for author label if a
         // description is required and it is added/removed/present
         PRAction::Opened | PRAction::Reopened | PRAction::Edited => {
-            if cfg.needs_description_label.is_some() {
+            if cfg.needs_description_label.is_none() {
                 merge_state.needs_description = Some(false);
             } else {
                 merge_state.needs_description = Some(
@@ -492,7 +492,7 @@ async fn on_review_state_event(
     let pr_number = pr.pr.number;
 
     // If reviews aren't required, then uhh, yah, we're done here
-    if cfg.waiting_for_review_label.is_none() {
+    if cfg.reviewed_label.is_none() {
         log::info!("PR #{} does not require reviews", pr_number,);
 
         merge_state.waiting_on_review = Some(false);
