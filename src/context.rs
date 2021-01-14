@@ -135,3 +135,100 @@ pub fn deserialize_action_context(
         metadata,
     })
 }
+
+/// Configuration options available for the action
+#[derive(Debug)]
+pub struct Config {
+    /// The label added when a PR does not have a body
+    pub needs_description_label: Option<String>,
+    /// The list of statuss that are required to be passed for the PR to be
+    /// automerged
+    pub required_statuses: Vec<String>,
+    /// The label applied when all of the PR's required status checks have passed
+    pub ci_passed_label: String,
+    /// Label applied when a PR has 1 or more reviewers and all of them are accepted
+    pub reviewed_label: Option<String>,
+    /// Label that can be manually added to PRs to block automerge
+    pub block_merge_label: Option<String>,
+    /// The period in milliseconds between when a PR can be automerged, and when
+    /// the action actually tries to perform the merge
+    pub automerge_grace_period: Option<u64>,
+    /// The method to use for merging the PR, defaults to `merge` if we fail
+    /// to parse or it is unset by the user
+    pub merge_method: Option<octocrab::params::pulls::MergeMethod>,
+}
+
+impl Config {
+    /// Deserializes the configuration from the environment variables set by
+    /// the action runner. We use this option instead of command line arguments
+    /// as it is much easier to manage overall, and also is the same way that
+    /// the node actions work.
+    pub fn deserialize() -> Result<Self, Error> {
+        fn read_input(name: &str) -> Result<String, Error> {
+            std::env::var(&format!("INPUT_{}", name.to_ascii_uppercase()))
+                .with_context(|| format!("failed to read input '{}'", name))
+        }
+
+        fn to_vec(input: String) -> Vec<String> {
+            input
+                .split(',')
+                .filter_map(|s| {
+                    let ctx_name = s.trim();
+
+                    if ctx_name.is_empty() {
+                        None
+                    } else {
+                        Some(ctx_name.to_owned())
+                    }
+                })
+                .collect()
+        }
+
+        Ok(Self {
+            needs_description_label: read_input("needs-description-label").ok().filter(|label| !label.is_empty()),
+            required_statuses: {
+                let rs = read_input("required-statuses").map(to_vec)?;
+
+                if rs.is_empty() {
+                    anyhow::bail!("must supply 1 or more valid 'required-statuses'");
+                } else {
+                    rs
+                }
+            },
+            ci_passed_label: read_input("ci-passed-label").and_then(|label| {
+                if label.is_empty() {
+                    anyhow::bail!("'ci-passed-label' is required to be a valid value");
+                } else {
+                    Ok(label)
+                }
+            })?,
+            reviewed_label: read_input("reviewed-label").ok().filter(|label| !label.is_empty()),
+            block_merge_label: read_input("block-merge-label").ok().filter(|label| !label.is_empty()),
+            automerge_grace_period: read_input("automerge-grace-period")
+                .and_then(|gp| {
+                    if gp.is_empty() {
+                        anyhow::bail!("ignoring empty string");
+                    } else {
+                        gp.parse().map_err(|e| {
+                            log::error!("Failed to parse '{}': {}", gp, e);
+                            anyhow::anyhow!("")
+                        })
+                    }
+                })
+                .ok(),
+            merge_method: read_input("merge-method").and_then(|mm| {
+                use octocrab::params::pulls::MergeMethod as MM;
+
+                match mm.as_str() {
+                    "merge" => Ok(MM::Merge),
+                    "squash" => Ok(MM::Squash),
+                    "rebase" => Ok(MM::Rebase),
+                    unknown => {
+                        log::error!("Unknown merge_method '{}' specified, falling back to default of 'merge'", unknown);
+                        Err(anyhow::anyhow!(""))
+                    }
+                }
+            }).ok(),
+        })
+    }
+}

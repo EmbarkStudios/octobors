@@ -1,15 +1,17 @@
+/// Queues the pull request for merging
 pub async fn queue(
     client: &crate::context::Client,
     pr: octocrab::models::pulls::PullRequest,
-    config: &crate::process::Config,
+    config: &crate::context::Config,
 ) -> Result<(), anyhow::Error> {
+    // Wait some amount of time before actually attempting the merge if the
+    // grace_period has been set
     if let Some(gp) = config.automerge_grace_period {
         tokio::time::sleep(std::time::Duration::from_millis(gp)).await;
     }
 
     let pr_number = pr.number;
     let prh = crate::client_request!(client, pulls);
-
     let ish = crate::client_request!(client, issues);
 
     let mut retry_count = 0u32;
@@ -25,6 +27,8 @@ pub async fn queue(
             .map(|labels| labels.iter().map(|l| l.name.clone()).collect())
             .unwrap_or_default();
 
+        // We recheck the merge state as it's possible any number of things could
+        // have changed, especially if there was a grace period
         if !crate::process::get_mergeable_state(pr.number, &labels, config) {
             log::info!(
                 "PR #{} was mutated into an umergeable state after it was queued, aborting merge",
@@ -51,8 +55,8 @@ pub async fn queue(
                 let abort_reason = match ms {
                     MergeableState::Draft => Some("PR is a draft and can't be merged".to_owned()),
                     MergeableState::Behind => Some(format!(
-                        "PR is behind '{}' and needs to be updated",
-                        pr.base.ref_field
+                        "PR branch '{}' is behind '{}' and needs to be updated",
+                        pr.head.ref_field, pr.base.ref_field,
                     )),
                     MergeableState::Dirty => {
                         Some("Github is unable to create a merge commit for the PR".to_owned())
@@ -62,7 +66,7 @@ pub async fn queue(
                     }
                     // So Github might set the state as "unstable" since the automerge
                     // action is currently running, but if we got here then the CI
-                    // statuses we actually cared about have all passed, so we should
+                    // statuses we actually cared about have all passed, so we "should"
                     // be ok
                     MergeableState::Clean | MergeableState::HasHooks | MergeableState::Unstable => {
                         let mut merge = prh
@@ -108,6 +112,8 @@ pub async fn queue(
                         abort_reason
                     );
 
+                    // Depending on how fast events get processed this might
+                    // end up commenting multiple times
                     let _ = ish
                         .create_comment(pr_number, format!("automerge aborted: {}", abort_reason))
                         .await;

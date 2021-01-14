@@ -3,97 +3,6 @@ use anyhow::{Context as _, Error};
 use models::StatusState;
 use octocrab::models;
 
-#[derive(Debug)]
-pub struct Config {
-    /// The label added when a PR does not have a body
-    pub needs_description_label: Option<String>,
-    /// The list of statuss that are required to be passed for the PR to be
-    /// automerged
-    pub required_statuses: Vec<String>,
-    /// The label applied when all of the PR's required status checks have passed
-    pub ci_passed_label: String,
-    /// Label applied when a PR has 1 or more reviewers and all of them are accepted
-    pub reviewed_label: Option<String>,
-    /// Label that can be manually added to PRs to block automerge
-    pub block_merge_label: Option<String>,
-    /// The period in milliseconds between when a PR can be automerged, and when
-    /// the action actually tries to perform the merge
-    pub automerge_grace_period: Option<u64>,
-    /// The method to use for merging to the PR
-    pub merge_method: Option<octocrab::params::pulls::MergeMethod>,
-}
-
-impl Config {
-    pub fn deserialize() -> Result<Self, Error> {
-        fn read_input(name: &str) -> Result<String, Error> {
-            std::env::var(&format!("INPUT_{}", name.to_ascii_uppercase()))
-                .with_context(|| format!("failed to read input '{}'", name))
-        }
-
-        fn to_vec(input: String) -> Vec<String> {
-            input
-                .split(',')
-                .filter_map(|s| {
-                    let ctx_name = s.trim();
-
-                    if ctx_name.is_empty() {
-                        None
-                    } else {
-                        Some(ctx_name.to_owned())
-                    }
-                })
-                .collect()
-        }
-
-        Ok(Self {
-            needs_description_label: read_input("needs-description-label").ok().filter(|label| !label.is_empty()),
-            required_statuses: {
-                let rs = read_input("required-statuses").map(to_vec)?;
-
-                if rs.is_empty() {
-                    anyhow::bail!("must supply 1 or more valid 'required-statuses'");
-                } else {
-                    rs
-                }
-            },
-            ci_passed_label: read_input("ci-passed-label").and_then(|label| {
-                if label.is_empty() {
-                    anyhow::bail!("'ci-passed-label' is required to be a valid value");
-                } else {
-                    Ok(label)
-                }
-            })?,
-            reviewed_label: read_input("reviewed-label").ok().filter(|label| !label.is_empty()),
-            block_merge_label: read_input("block-merge-label").ok().filter(|label| !label.is_empty()),
-            automerge_grace_period: read_input("automerge-grace-period")
-                .and_then(|gp| {
-                    if gp.is_empty() {
-                        anyhow::bail!("ignoring empty string");
-                    } else {
-                        gp.parse().map_err(|e| {
-                            log::error!("Failed to parse '{}': {}", gp, e);
-                            anyhow::anyhow!("")
-                        })
-                    }
-                })
-                .ok(),
-            merge_method: read_input("merge-method").and_then(|mm| {
-                use octocrab::params::pulls::MergeMethod as MM;
-
-                match mm.as_str() {
-                    "merge" => Ok(MM::Merge),
-                    "squash" => Ok(MM::Squash),
-                    "rebase" => Ok(MM::Rebase),
-                    unknown => {
-                        log::error!("Unknown merge_method '{}' specified, falling back to default of 'merge'", unknown);
-                        Err(anyhow::anyhow!(""))
-                    }
-                }
-            }).ok(),
-        })
-    }
-}
-
 enum EventTrigger {
     /// Something changed about the PR itself
     PullRequest {
@@ -116,10 +25,12 @@ struct PREvent {
     trigger: EventTrigger,
 }
 
+/// Gets one or more pull requests that the event we are processing actually
+/// applies to
 async fn get_pull_requests(
     client: &context::Client,
     event: context::ActionContext,
-    cfg: &Config,
+    cfg: &context::Config,
 ) -> Result<Option<Vec<PREvent>>, Error> {
     match event.payload {
         context::WebhookPayload::PullRequest(pr) => Ok(Some(vec![PREvent {
@@ -180,7 +91,7 @@ async fn get_pull_requests(
 pub async fn process_event(
     client: context::Client,
     event: crate::context::ActionContext,
-    cfg: Config,
+    cfg: context::Config,
 ) -> Result<(), Error> {
     let prs_to_check = get_pull_requests(&client, event, &cfg).await?;
 
@@ -207,12 +118,15 @@ struct MergeState {
     reviewed: Option<bool>,
 }
 
-async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Result<(), Error> {
+async fn process_pr(
+    client: &context::Client,
+    pr: PREvent,
+    cfg: &context::Config,
+) -> Result<(), Error> {
     let pr_number = pr.pr.number;
 
-    // If the PR is a draft, we just mark it as waiting on the author and
-    // abort any further processing, as marking a PR as a draft is the cleanest
-    // and most easily recognizable way to indicate the PR should not be automerged
+    // Ignore draft PRs altogether, marking a PR as a draft is the easiest
+    // way for the author to communicate they don't want their PR automerged
     if pr.pr.draft {
         log::info!(
             "PR #{} is marked as a draft, aborting any further processing",
@@ -222,6 +136,10 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     }
 
     if pr.pr.state == models::IssueState::Closed {
+        log::info!(
+            "PR #{} is closed, aborting any further processing",
+            pr_number
+        );
         return Ok(());
     }
 
@@ -254,7 +172,6 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     let mut labels_to_add = Vec::new();
     let mut labels_to_remove = Vec::new();
 
-    // Check the state of the description
     if let (Some(needs_description), Some(label)) =
         (merge_state.needs_description, &cfg.needs_description_label)
     {
@@ -265,7 +182,6 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
         }
     }
 
-    // Check the review state
     if let (Some(reviewed), Some(label)) = (merge_state.reviewed, &cfg.reviewed_label) {
         if reviewed {
             labels_to_add.push(label);
@@ -274,7 +190,6 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
         }
     }
 
-    // Check the CI status
     if let Some(ci_passed) = merge_state.ci_passed {
         if ci_passed {
             labels_to_add.push(&cfg.ci_passed_label);
@@ -286,6 +201,15 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     add_labels(client, pr_number, &mut labels, &labels_to_add).await?;
     remove_labels(client, pr_number, &mut labels, &labels_to_remove).await?;
 
+    // We explicitly ignore beginning an automerge from a status event due to how
+    // status events work differently from most other events. Status (and check_run)
+    // events are delivered to the repo/default branch, _not_ the PR, so if a user
+    // is watching their PR they won't see the action running before their PR is
+    // automerged, it will just seem to happen out of nowhere. So instead we rely
+    // on the action running with the `pull_request.labeled` event so the status
+    // event can set the `ci_passed` label, then the PR action will run and possibly
+    // automerge the PR and just give better visibility to the user. As well
+    // as make the sequence of events easier to see in the actions UI.
     if matches!(pr.trigger, EventTrigger::Status { .. }) {
         log::info!(
             "PR#{} was a status update, appropriate labels have been added or removed",
@@ -302,10 +226,12 @@ async fn process_pr(client: &context::Client, pr: PREvent, cfg: &Config) -> Resu
     Ok(())
 }
 
-pub fn get_mergeable_state(pr_number: u64, labels: &[String], cfg: &Config) -> bool {
+/// Determines whether the PR is automergeable based on the current set of labels.
+/// Prints out a warning for any of the automerge conditions that aren't met.
+pub fn get_mergeable_state(pr_number: u64, labels: &[String], cfg: &context::Config) -> bool {
     if let Some(block_merge_label) = &cfg.block_merge_label {
         if has_label(labels, block_merge_label).is_some() {
-            log::info!(
+            log::warn!(
                 "PR #{} has the '{}' label which blocks automerging",
                 pr_number,
                 block_merge_label,
@@ -317,25 +243,23 @@ pub fn get_mergeable_state(pr_number: u64, labels: &[String], cfg: &Config) -> b
 
     if let Some(needs_description_label) = &cfg.needs_description_label {
         if has_label(labels, needs_description_label).is_some() {
-            log::info!(
+            log::warn!(
                 "PR #{} does not have a description, but one is required",
                 pr_number
             );
-
             return false;
         }
     }
 
     if let Some(reviewed_label) = &cfg.reviewed_label {
         if has_label(labels, reviewed_label).is_none() {
-            log::info!("PR #{} needs 1 or more review approvals", pr_number);
-
+            log::warn!("PR #{} needs 1 or more review approvals", pr_number);
             return false;
         }
     }
 
     if has_label(labels, &cfg.ci_passed_label).is_none() {
-        log::info!("PR #{} needs CI to pass", pr_number);
+        log::warn!("PR #{} needs CI to pass", pr_number);
         return false;
     }
 
@@ -347,6 +271,7 @@ fn has_label(labels: &[String], name: &str) -> Option<usize> {
     labels.iter().position(|label| label == name)
 }
 
+/// Adds one or more labels to the PR. Only adds labels that aren't already present.
 async fn add_labels(
     client: &context::Client,
     pr_number: u64,
@@ -381,6 +306,8 @@ async fn add_labels(
     Ok(())
 }
 
+/// Removes one or more labels from the PR. Only removes labels that are actually
+/// on the PR.
 async fn remove_labels(
     client: &context::Client,
     pr_number: u64,
@@ -415,10 +342,12 @@ async fn remove_labels(
     Ok(())
 }
 
+/// Changes the state of `needs_description`, `ci_passed`, or `reviewed` depending
+/// the particular PR action that occurred
 async fn on_pr_event(
     client: &context::Client,
     pr: &PREvent,
-    cfg: &Config,
+    cfg: &context::Config,
     merge_state: &mut MergeState,
     action: models::pulls::PullRequestAction,
 ) -> Result<(), Error> {
@@ -479,10 +408,12 @@ async fn on_pr_event(
     Ok(())
 }
 
+/// Changes the state of `reviewed` based on the the state of every requested
+/// review
 async fn on_review_state_event(
     client: &context::Client,
     pr: &PREvent,
-    cfg: &Config,
+    cfg: &context::Config,
     merge_state: &mut MergeState,
     review: Option<(
         models::pulls::PullRequestReviewAction,
@@ -547,7 +478,9 @@ async fn on_review_state_event(
     let reviews = ph.list_reviews(pr_number).await?;
 
     // We need to keep track of the last dis/approve state for each individual
-    // reviewer, as every state changes is stored in chronological order
+    // reviewer, as every state change is stored in chronological order, and
+    // the reviewer might have approved then requested changes, then approved
+    // again
     if reviews.is_empty() {
         log::debug!("No reviews are available for PR#{}", pr_number);
         merge_state.reviewed = Some(false);
@@ -581,10 +514,12 @@ async fn on_review_state_event(
     Ok(())
 }
 
+/// Changes the value of `ci_passed` depending on the state of all of the
+/// required checks on the PR
 async fn on_status_event(
     client: &context::Client,
     pr: &PREvent,
-    cfg: &Config,
+    cfg: &context::Config,
     merge_state: &mut MergeState,
     context: &str,
     state: models::StatusState,

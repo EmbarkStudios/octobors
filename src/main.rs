@@ -1,5 +1,4 @@
 use anyhow::{Context as _, Error};
-use octobors::process;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -20,23 +19,25 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn real_main() -> Result<(), Error> {
+    use octobors::context;
+
     hook_logger()?;
 
     let args = Opts::from_args();
 
-    let action_event = octobors::context::deserialize_action_context(args.event_path.as_ref())?;
+    let action_event = context::deserialize_action_context(args.event_path.as_ref())?;
 
     let client = octocrab::OctocrabBuilder::new()
         .personal_token(args.token)
         .build()
         .context("failed to create client")?;
 
-    let client = octobors::context::Client::new(client)?;
-    let config = process::Config::deserialize()?;
+    let client = context::Client::new(client)?;
+    let config = context::Config::deserialize()?;
 
     log::debug!("configuration: {:?}", config);
 
-    process::process_event(client, action_event, config).await?;
+    octobors::process::process_event(client, action_event, config).await?;
 
     Ok(())
 }
