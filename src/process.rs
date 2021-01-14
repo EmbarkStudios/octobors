@@ -481,20 +481,32 @@ async fn on_review_state_event(
     // reviewer, as every state change is stored in chronological order, and
     // the reviewer might have approved then requested changes, then approved
     // again
-    if reviews.is_empty() {
+    if reviews.items.is_empty() {
         log::debug!("No reviews are available for PR#{}", pr_number);
         merge_state.reviewed = Some(false);
     } else {
         let mut review_states = std::collections::HashMap::new();
 
-        for rev in &reviews {
-            match rev.state {
-                Some(models::pulls::ReviewState::Commented) | None => {
-                    log::debug!("Ignoring comment from '{}'", rev.user.login);
-                }
-                Some(state) => {
-                    review_states.insert(rev.user.id, (&rev.user, state));
-                }
+        let mut insert_review = |rev: models::pulls::Review| match rev.state {
+            Some(models::pulls::ReviewState::Commented) | None => {
+                log::debug!("Ignoring comment from '{}'", rev.user.login);
+            }
+            Some(state) => {
+                review_states.insert(rev.user.id, (rev.user, state));
+            }
+        };
+
+        for rev in reviews.items {
+            insert_review(rev);
+        }
+
+        while let Some(page) = client
+            .inner
+            .get_page::<models::pulls::Review>(&reviews.next)
+            .await?
+        {
+            for rev in page {
+                insert_review(rev);
             }
         }
 

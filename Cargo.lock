@@ -577,7 +577,7 @@ dependencies = [
 [[package]]
 name = "octocrab"
 version = "0.8.6"
-source = "git+https://github.com/EmbarkStudios/octocrab?rev=c7b7dc4#c7b7dc4ec4914a9007d7a2995db15453faa067b1"
+source = "git+https://github.com/EmbarkStudios/octocrab?rev=e662d8e#e662d8e221ecbe474f6673fcf58e6cb7492d601a"
 dependencies = [
  "arc-swap",
  "async-trait",
