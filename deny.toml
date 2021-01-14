@@ -1,0 +1,71 @@
+targets = [
+    { triple = "x86_64-unknown-linux-musl" },
+]
+
+[advisories]
+vulnerability = "deny"
+unmaintained = "deny"
+yanked = "deny"
+notice = "warn"
+ignore = [
+]
+
+[licenses]
+unlicensed = "deny"
+allow = [
+    "Apache-2.0",   # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
+    "ISC",          # https://tldrlegal.com/license/-isc-license
+    "MIT",          # https://tldrlegal.com/license/mit-license
+]
+copyleft = "deny"
+exceptions = [
+    # ring uses code from multiple libraries but all with permissive licenses
+    # https://tldrlegal.com/license/openssl-license-(openssl)
+    { allow = ["ISC", "MIT", "OpenSSL"], name = "ring" },
+
+    # MPL 2.0 is a copyleft license and we HAVE to disclose
+    # the source code of these specific libraries if we do changes to it.
+    # which we do through public forks of the repos if/when we do changes to it.
+    # https://tldrlegal.com/license/mozilla-public-license-2.0-(mpl-2)
+    { allow = ["MPL-2.0"], name = "webpki-roots" },
+]
+
+[[licenses.clarify]]
+name = "ring"
+# SPDX considers OpenSSL to encompass both the OpenSSL and SSLeay licenses
+# https://spdx.org/licenses/OpenSSL.html
+# ISC - Both BoringSSL and ring use this for their new files
+# MIT - "Files in third_party/ have their own licenses, as described therein. The MIT
+# license, for third_party/fiat, which, unlike other third_party directories, is
+# compiled into non-test libraries, is included below."
+# OpenSSL - Obviously
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[bans]
+multiple-versions = "deny"
+deny = [
+]
+skip = [
+    # Multiple crates still depend on this old version of cfg-if :(
+    { name = "cfg-if", version = "=0.1.10" },
+]
+skip-tree = [
+    # the doc-cfg crate has had 0 activity in 2 years and has several severely
+    # outdated dependencies
+    { name = "doc-cfg", version = "=0.1.0" },
+
+    # hyper pulls in 2 versions of pin-project :(
+    { name = "pin-project", version = "=0.4.27" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = [
+]
+
+[sources.allow-org]
+github = ["EmbarkStudios"]
