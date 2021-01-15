@@ -53,10 +53,6 @@ skip = [
     { name = "cfg-if", version = "=0.1.10" },
 ]
 skip-tree = [
-    # the doc-cfg crate has had 0 activity in 2 years and has several severely
-    # outdated dependencies
-    { name = "doc-cfg", version = "=0.1.0" },
-
     # hyper pulls in 2 versions of pin-project :(
     { name = "pin-project", version = "=0.4.27" },
 ]
@@ -68,4 +64,4 @@ allow-git = [
 ]
 
 [sources.allow-org]
-github = ["EmbarkStudios"]
+github = []
