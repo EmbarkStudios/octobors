@@ -1,0 +1,29 @@
+[package]
+name = "octobors"
+version = "0.1.0"
+authors = ["Jake Shadle <jake.shadle@embark-studios.com>"]
+edition = "2018"
+
+[dependencies]
+# Error helpers
+anyhow = "1.0"
+# Simplify action logging
+fern = "0.6"
+# log macros
+log = "0.4"
+# Used for making all of the requests to github
+octocrab = { version = "0.8", default-features = false, features = ["rustls"] }
+# De/serialization support
+serde = { version = "1.0", features = ["derive"] }
+# JSON support
+serde_json = "1.0"
+# Argument parsing
+structopt = "0.3"
+# Async runtime, note we're stuck on 0.2 until reqwest/hyper update to 0.3
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[patch.crates-io]
+# Patch to add a rustls feature. Also includes the latest from octocrab, which
+# includes a bump of reqwest which allows us to use tokio 1.0
+#octocrab = { git = "https://github.com/EmbarkStudios/octocrab", rev = "e662d8e" }
+#octocrab = { path = "../octocrab" }
