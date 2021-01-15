@@ -1,1 +1,1 @@
-FROM docker.io/embarkstudios/octobors:0.1.14
+FROM docker.io/embarkstudios/octobors:0.2.0
