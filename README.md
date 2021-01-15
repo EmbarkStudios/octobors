@@ -5,7 +5,7 @@
 [![dependency status](https://deps.rs/repo/github/EmbarkStudios/octobors/status.svg)](https://deps.rs/repo/github/EmbarkStudios/octobors)
 [![Build status](https://github.com/EmbarkStudios/octobors/workflows/CI/badge.svg)](https://github.com/EmbarkStudios/octobors/actions)
 
-Gitub action for automerging PRs based on a few rules.
+GitHub action for automerging PRs based on a few rules.
 
 ## Why?
 
