@@ -1,10 +1,19 @@
 // See https://github.com/actions/toolkit/blob/main/packages/github/src/context.ts
 // for more details
 
-use anyhow::{Context as _, Error};
-use octocrab::models;
+use anyhow::{Context as _, Error, Result};
+use octocrab::{
+    models,
+    params::{pulls::Sort, Direction},
+};
 use serde::Deserialize;
-use std::env::var;
+
+#[macro_export]
+macro_rules! client_request {
+    ($client:expr, $method:ident) => {
+        $client.inner.$method(&$client.owner, &$client.repo)
+    };
+}
 
 pub struct Client {
     pub inner: octocrab::Octocrab,
@@ -13,30 +22,55 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(octo: octocrab::Octocrab) -> Result<Self, Error> {
-        let repo_name =
-            std::env::var("GITHUB_REPOSITORY").context("unable to determine repository")?;
+    pub fn new(token: String, owner: String, repo: String) -> Result<Self> {
+        let inner = octocrab::OctocrabBuilder::new()
+            .personal_token(token)
+            .build()
+            .context("failed to create client")?;
+        Ok(Self { inner, owner, repo })
+    }
+
+    pub fn new_from_env() -> Result<Self, Error> {
+        // Read GitHub API token
+        let token = read_env("GITHUB_TOKEN")?;
+
+        // Determine owner and name of repo
+        let repo = read_env("GITHUB_REPOSITORY")?;
         let (owner, name) = {
-            let mut it = repo_name.split('/');
+            let mut it = repo.split('/');
             (
-                it.next().context("unable to determine repo owner")?,
-                it.next().context("unable to determine repo name")?,
+                it.next()
+                    .context("unable to determine repo owner")?
+                    .to_string(),
+                it.next()
+                    .context("unable to determine repo name")?
+                    .to_string(),
             )
         };
 
-        Ok(Self {
-            inner: octo,
-            owner: owner.to_owned(),
-            repo: name.to_owned(),
-        })
+        Self::new(token, owner, name)
+    }
+
+    /// Get the currently open pull requests for the repo.
+    ///
+    /// Only the most recently pull requests are included as pagination is not
+    /// handled. This is OK as we are not interested in outdated PRs as they
+    /// won't have been updated since we last checked.
+    pub async fn get_pull_requests(&self) -> Result<Vec<models::pulls::PullRequest>> {
+        Ok(client_request!(self, pulls)
+            .list()
+            .state(octocrab::params::State::Open)
+            .direction(Direction::Descending)
+            .sort(Sort::Updated)
+            .send()
+            .await
+            .context("unable to retrieve pull requests")?
+            .items)
     }
 }
 
-#[macro_export]
-macro_rules! client_request {
-    ($client:expr, $method:ident) => {
-        $client.inner.$method(&$client.owner, &$client.repo)
-    };
+fn read_env(var_name: &str) -> Result<String> {
+    std::env::var(var_name).with_context(|| format!("failed to read input '{}'", var_name))
 }
 
 #[derive(Debug)]
@@ -93,49 +127,6 @@ pub enum WebhookPayload {
     PullRequestReview(Box<PullRequestReview>),
 }
 
-pub fn deserialize_action_context(
-    path: Option<impl AsRef<std::path::Path>>,
-) -> Result<ActionContext, Error> {
-    let path = match path {
-        Some(path) => path.as_ref().to_owned(),
-        None => var("GITHUB_EVENT_PATH")
-            .context("unable to read GITHUB_EVENT_PATH")?
-            .into(),
-    };
-
-    let event_data = std::fs::read_to_string(&path).with_context(|| {
-        format!(
-            "Unable to read Github action event from '{}'",
-            path.display()
-        )
-    })?;
-
-    log::debug!("Event data: {}", event_data);
-
-    let event_name = var("GITHUB_EVENT_NAME").context("failed to read GITHUB_EVENT_NAME")?;
-
-    log::debug!("Action triggered by '{}' event", event_name);
-
-    let payload: WebhookPayload = match event_name.as_str() {
-        "pull_request" => serde_json::from_str::<PullRequest>(&event_data)
-            .map(|pr| WebhookPayload::PullRequest(Box::new(pr))),
-        "pull_request_review" => serde_json::from_str::<PullRequestReview>(&event_data)
-            .map(|prr| WebhookPayload::PullRequestReview(Box::new(prr))),
-        "status" => serde_json::from_str::<Status>(&event_data).map(WebhookPayload::Status),
-        unknown => {
-            anyhow::bail!("ignoring event '{}'", unknown);
-        }
-    }?;
-
-    let metadata = serde_json::from_str(&event_data)?;
-
-    Ok(ActionContext {
-        event_name,
-        payload,
-        metadata,
-    })
-}
-
 /// Configuration options available for the action
 #[derive(Debug)]
 pub struct Config {
@@ -155,7 +146,7 @@ pub struct Config {
     pub automerge_grace_period: Option<u64>,
     /// The method to use for merging the PR, defaults to `merge` if we fail
     /// to parse or it is unset by the user
-    pub merge_method: Option<octocrab::params::pulls::MergeMethod>,
+    pub merge_method: octocrab::params::pulls::MergeMethod,
 }
 
 impl Config {
@@ -165,8 +156,7 @@ impl Config {
     /// the node actions work.
     pub fn deserialize() -> Result<Self, Error> {
         fn read_input(name: &str) -> Result<String, Error> {
-            std::env::var(&format!("INPUT_{}", name.to_ascii_uppercase()))
-                .with_context(|| format!("failed to read input '{}'", name))
+            read_env(&format!("INPUT_{}", name.to_ascii_uppercase()))
         }
 
         fn to_vec(input: String) -> Vec<String> {
@@ -185,7 +175,9 @@ impl Config {
         }
 
         Ok(Self {
-            needs_description_label: read_input("needs-description-label").ok().filter(|label| !label.is_empty()),
+            needs_description_label: read_input("needs-description-label")
+                .ok()
+                .filter(|label| !label.is_empty()),
             required_statuses: {
                 let rs = read_input("required-statuses").map(to_vec)?;
 
@@ -202,8 +194,12 @@ impl Config {
                     Ok(label)
                 }
             })?,
-            reviewed_label: read_input("reviewed-label").ok().filter(|label| !label.is_empty()),
-            block_merge_label: read_input("block-merge-label").ok().filter(|label| !label.is_empty()),
+            reviewed_label: read_input("reviewed-label")
+                .ok()
+                .filter(|label| !label.is_empty()),
+            block_merge_label: read_input("block-merge-label")
+                .ok()
+                .filter(|label| !label.is_empty()),
             automerge_grace_period: read_input("automerge-grace-period")
                 .and_then(|gp| {
                     if gp.is_empty() {
@@ -216,19 +212,24 @@ impl Config {
                     }
                 })
                 .ok(),
-            merge_method: read_input("merge-method").and_then(|mm| {
-                use octocrab::params::pulls::MergeMethod as MM;
+            merge_method: read_input("merge-method")
+                .map(|mm| {
+                    use octocrab::params::pulls::MergeMethod as MM;
 
-                match mm.as_str() {
-                    "merge" => Ok(MM::Merge),
-                    "squash" => Ok(MM::Squash),
-                    "rebase" => Ok(MM::Rebase),
-                    unknown => {
-                        log::error!("Unknown merge_method '{}' specified, falling back to default of 'merge'", unknown);
-                        Err(anyhow::anyhow!(""))
+                    match mm.as_str() {
+                        "merge" => MM::Merge,
+                        "squash" => MM::Squash,
+                        "rebase" => MM::Rebase,
+                        unknown => {
+                            log::error!(
+                                "Unknown merge_method '{}' specified, falling back to 'merge'",
+                                unknown
+                            );
+                            MM::Merge
+                        }
                     }
-                }
-            }).ok(),
+                })
+                .unwrap_or(octocrab::params::pulls::MergeMethod::Merge),
         })
     }
 }

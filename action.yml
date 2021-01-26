@@ -32,6 +32,7 @@ runs:
   image: "action.dockerfile"
   env:
     GITHUB_TOKEN: ${{ inputs.github-token }}
+    INPUT_NEEDS-DESCRIPTION-LABEL: ${{ inputs.needs-description-label }}
     INPUT_REQUIRED-STATUSES: ${{ inputs.required-statuses }}
     INPUT_CI-PASSED-LABEL: ${{ inputs.ci-passed-label }}
     INPUT_REVIEWED-LABEL: ${{ inputs.waiting-for-review-label }}

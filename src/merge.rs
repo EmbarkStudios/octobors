@@ -73,11 +73,7 @@ pub async fn queue(
                             .merge(pr_number)
                             .title(format!("{} (#{})", pr.title, pr_number))
                             .sha(pr.head.sha)
-                            .method(
-                                config
-                                    .merge_method
-                                    .unwrap_or(octocrab::params::pulls::MergeMethod::Merge),
-                            )
+                            .method(config.merge_method)
                             .message(match pr.body {
                                 Some(body) => format!("{}\n\n{}", body, pr.url),
                                 None => pr.url,
