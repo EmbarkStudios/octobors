@@ -1,7 +1,214 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::{client_request, context};
-use anyhow::{Context as _, Error};
-use models::StatusState;
+use anyhow::{Context as _, Error, Result};
+use chrono::{DateTime, Duration, Utc};
+use models::{
+    pulls::{PullRequest, ReviewState},
+    IssueState, StatusState,
+};
 use octocrab::models;
+
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, Clone)]
+pub struct PR {
+    id: u64,
+    draft: bool,
+    state: models::IssueState,
+    updated_at: DateTime<Utc>,
+    labels: HashSet<String>,
+    has_description: bool,
+}
+
+impl PR {
+    pub fn from_octocrab_pull_request(pr: PullRequest) -> Self {
+        let labels = pr
+            .labels
+            .unwrap_or_default()
+            .into_iter()
+            .map(|l| l.name)
+            .collect();
+        Self {
+            id: pr.id,
+            draft: pr.draft,
+            state: pr.state,
+            updated_at: pr.updated_at.unwrap_or(pr.created_at),
+            has_description: pr.body.unwrap_or_default() != "",
+            labels,
+        }
+    }
+}
+
+pub struct Analyzer<'a> {
+    pr: PR,
+    client: &'a context::Client,
+    config: &'a context::Config,
+    // We optionally keep a cached version of these fields using `RemoteData`
+    // so that the method can be called a second time without side effects,
+    // and also so we can pre-seed the cache with values in order to not hit
+    // the GitHub API in unit tests
+    reviews: RemoteData<Vec<ReviewState>>,
+    statuses: RemoteData<HashMap<String, StatusState>>,
+}
+
+impl<'a> Analyzer<'a> {
+    pub fn new(pr: PR, client: &'a context::Client, config: &'a context::Config) -> Self {
+        Self {
+            pr,
+            client,
+            config,
+            reviews: RemoteData::NotFetched,
+            statuses: RemoteData::NotFetched,
+        }
+    }
+
+    /// Analyze a PR to determine what actions need to be undertaken.
+    pub async fn required_actions(&mut self) -> Result<Actions> {
+        let pr = &self.pr;
+        let mut actions = Actions::noop();
+
+        if pr.draft {
+            log::info!("PR #{} is a draft, nothing to do", pr.id);
+            return Ok(actions);
+        }
+
+        if pr.state == IssueState::Closed {
+            log::info!("PR #{} is closed, nothing to do", pr.id);
+            return Ok(actions);
+        }
+
+        let fresh = Duration::minutes(60);
+        if pr.updated_at < Utc::now() - fresh {
+            log::info!("PR #{} inactive for > #{}, nothing to do", pr.id, fresh);
+            return Ok(actions);
+        }
+
+        // Now that the basic checks have been passed we can gather information
+        // from the GitHub API in order to do the full check. We do this second
+        // so that we use the GitHub API as little as possible, we don't want to
+        // hit the rate limit.
+        let pr_approved = self.pr_approved().await?;
+        let statuses_passed = self.pr_statuses_passed().await?;
+        let mut description_ok = true;
+
+        // Assign the "reviewed" label if there is one and the PR is approved
+        if let Some(label) = self.config.reviewed_label.clone() {
+            actions.set_label(label, pr_approved);
+        }
+
+        // Assign the "needs-description" label if there is one and the PR lacks one
+        if let Some(label) = self.config.needs_description_label.clone() {
+            description_ok = self.pr.has_description;
+            actions.set_label(label, !self.pr.has_description);
+        }
+
+        // Do not merge a PR if it was updated within the
+        if let Some(label) = self.config.needs_description_label.clone() {
+            description_ok = self.pr.has_description;
+            actions.set_label(label, !self.pr.has_description);
+        }
+
+        // Assign the "ci-passed" label if CI passed
+        actions.set_label(self.config.ci_passed_label.to_string(), statuses_passed);
+
+        actions.set_merge(
+            !self.block_merge_label_applied() && description_ok && pr_approved && statuses_passed,
+        );
+
+        return Ok(actions);
+    }
+
+    async fn pr_approved(&mut self) -> Result<bool> {
+        let mut rejected = false;
+        let mut approved = false;
+        for review in self.pr_reviews().await?.iter() {
+            match review {
+                ReviewState::Approved => approved = true,
+                ReviewState::ChangesRequested => rejected = true,
+                _ => (),
+            }
+        }
+        Ok(approved && !rejected)
+    }
+
+    async fn pr_statuses_passed(&mut self) -> Result<bool> {
+        for required in &self.config.required_statuses {
+            if !self.status_passed(required).await? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+
+    fn block_merge_label_applied(&self) -> bool {
+        match &self.config.block_merge_label {
+            None => false,
+            Some(label) => self.pr.labels.contains(label),
+        }
+    }
+
+    async fn pr_reviews(&mut self) -> Result<&Vec<ReviewState>> {
+        match &self.reviews {
+            RemoteData::Fetched(reviews) => Ok(&reviews),
+            RemoteData::NotFetched => todo!(),
+        }
+    }
+
+    async fn status_passed(&mut self, name: &str) -> Result<bool> {
+        Ok(self.pr_statuses().await?.get(name) == Some(&StatusState::Success))
+    }
+
+    async fn pr_statuses(&mut self) -> Result<&HashMap<String, StatusState>> {
+        match &self.statuses {
+            RemoteData::Fetched(statuses) => Ok(&statuses),
+            RemoteData::NotFetched => todo!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Actions {
+    merge: bool,
+    add_labels: HashSet<String>,
+    remove_labels: HashSet<String>,
+}
+
+pub enum RemoteData<T> {
+    NotFetched,
+    Fetched(T),
+}
+
+impl Actions {
+    pub fn noop() -> Self {
+        Self::default()
+    }
+
+    pub fn set_label(&mut self, label: String, should_be_present: bool) -> &mut Self {
+        if should_be_present {
+            self.add_labels.insert(label);
+        } else {
+            self.remove_labels.insert(label);
+        }
+        self
+    }
+
+    pub fn set_merge(&mut self, should_merge: bool) -> &mut Self {
+        self.merge = should_merge;
+        self
+    }
+}
+
+impl Default for Actions {
+    fn default() -> Self {
+        Self {
+            merge: false,
+            add_labels: Default::default(),
+            remove_labels: Default::default(),
+        }
+    }
+}
 
 enum EventTrigger {
     /// Something changed about the PR itself

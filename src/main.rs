@@ -1,14 +1,4 @@
-use anyhow::{Context as _, Error};
-use structopt::StructOpt;
-
-#[derive(StructOpt)]
-struct Opts {
-    /// The Github API token to use for all requests
-    #[structopt(long, env = "GITHUB_TOKEN")]
-    token: String,
-    #[structopt(long = "event")]
-    event_path: Option<std::path::PathBuf>,
-}
+use anyhow::{Context as _, Error, Result};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -19,25 +9,12 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn real_main() -> Result<(), Error> {
-    use octobors::context;
-
     hook_logger()?;
+    let app = octobors::Octobors::new()?;
 
-    let args = Opts::from_args();
+    log::debug!("configuration: {:#?}", app.config);
 
-    let action_event = context::deserialize_action_context(args.event_path.as_ref())?;
-
-    let client = octocrab::OctocrabBuilder::new()
-        .personal_token(args.token)
-        .build()
-        .context("failed to create client")?;
-
-    let client = context::Client::new(client)?;
-    let config = context::Config::deserialize()?;
-
-    log::debug!("configuration: {:?}", config);
-
-    octobors::process::process_event(client, action_event, config).await?;
+    octobors::Octobors::new()?.process_pull_requests().await?;
 
     Ok(())
 }
