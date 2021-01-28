@@ -18,10 +18,22 @@ impl Octobors {
     }
 
     pub async fn process_pull_requests(&self) -> Result<()> {
+        log::info!("Feching pull requests");
+
         let prs = self.client.get_pull_requests().await?;
 
-        dbg!(&prs[0]);
+        for pr in prs.into_iter() {
+            let pr = process::PR::from_octocrab_pull_request(pr);
+            log::info!("Processing pull request {}", pr.id);
 
+            // Analyze the PR to determine if there is anything we need to do
+            let actions = process::Analyzer::new(&pr, &self.client, &self.config)
+                .required_actions()
+                .await?;
+            log::info!("PR {}: {:?}", pr.id, actions);
+        }
+
+        log::info!("Done");
         Ok(())
     }
 }
