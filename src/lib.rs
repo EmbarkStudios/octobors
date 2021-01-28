@@ -24,13 +24,13 @@ impl Octobors {
 
         for pr in prs.into_iter() {
             let pr = process::PR::from_octocrab_pull_request(pr);
-            log::info!("Processing pull request {}", pr.id);
+            log::info!("PR #{}: Processing", pr.number);
 
             // Analyze the PR to determine if there is anything we need to do
             let actions = process::Analyzer::new(&pr, &self.client, &self.config)
                 .required_actions()
                 .await?;
-            log::info!("PR {}: {:?}", pr.id, actions);
+            log::info!("PR #{}: {:?}", pr.number, actions);
         }
 
         log::info!("Done");

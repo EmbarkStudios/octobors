@@ -16,7 +16,8 @@ fn make_context() -> (PR, context::Client, context::Config) {
         merge_method: octocrab::params::pulls::MergeMethod::Rebase,
     };
     let pr = PR {
-        id: 1,
+        id: 13482,
+        number: 1,
         commit_sha: "somesha".to_string(),
         draft: false,
         state: models::IssueState::Open,
