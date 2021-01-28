@@ -89,22 +89,18 @@ impl<'a> Analyzer<'a> {
         // from the GitHub API in order to do the full check. We do this second
         // so that we use the GitHub API as little as possible, we don't want to
         // hit the rate limit.
-        let pr_approved = self.pr_approved().await?;
         let statuses_passed = self.pr_statuses_passed().await?;
         let mut description_ok = true;
+        let mut review_ok = true;
 
         // Assign the "reviewed" label if there is one and the PR is approved
         if let Some(label) = self.config.reviewed_label.clone() {
+            let pr_approved = self.pr_approved().await?;
             actions.set_label(label, pr_approved);
+            review_ok = pr_approved;
         }
 
         // Assign the "needs-description" label if there is one and the PR lacks one
-        if let Some(label) = self.config.needs_description_label.clone() {
-            description_ok = self.pr.has_description;
-            actions.set_label(label, !self.pr.has_description);
-        }
-
-        // Do not merge a PR if it was updated within the
         if let Some(label) = self.config.needs_description_label.clone() {
             description_ok = self.pr.has_description;
             actions.set_label(label, !self.pr.has_description);
@@ -114,23 +110,23 @@ impl<'a> Analyzer<'a> {
         actions.set_label(self.config.ci_passed_label.to_string(), statuses_passed);
 
         actions.set_merge(
-            !self.block_merge_label_applied() && description_ok && pr_approved && statuses_passed,
+            !self.block_merge_label_applied() && description_ok && review_ok && statuses_passed,
         );
 
         return Ok(actions);
     }
 
     async fn pr_approved(&mut self) -> Result<bool> {
-        let mut rejected = false;
+        let mut waiting = false;
         let mut approved = false;
         for review in self.pr_reviews().await?.iter() {
             match review {
                 ReviewState::Approved => approved = true,
-                ReviewState::ChangesRequested => rejected = true,
+                ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
                 _ => (),
             }
         }
-        Ok(approved && !rejected)
+        Ok(approved && !waiting)
     }
 
     async fn pr_statuses_passed(&mut self) -> Result<bool> {
