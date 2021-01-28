@@ -128,6 +128,21 @@ async fn review_not_required_if_label_not_configured_pr_actions() {
 }
 
 #[tokio::test]
+async fn changes_requested_still_blocks_if_label_not_configured() {
+    let (client, mut config) = make_context();
+    config.reviewed_label = None;
+    let mut analyzer = make_analyzer(&client, &config);
+    analyzer.reviews = RemoteData::Fetched(vec![ReviewState::ChangesRequested]);
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(false)
+            .set_label("ci-passed".to_string(), true)
+            .set_label("needs-description".to_string(), false)
+    );
+}
+
+#[tokio::test]
 async fn required_ci_not_passed_pr_actions() {
     macro_rules! assert_ci_failed_actions {
         ($cases:expr) => {{

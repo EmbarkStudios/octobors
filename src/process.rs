@@ -90,14 +90,12 @@ impl<'a> Analyzer<'a> {
         // so that we use the GitHub API as little as possible, we don't want to
         // hit the rate limit.
         let statuses_passed = self.pr_statuses_passed().await?;
+        let pr_approved = self.pr_approved().await?;
         let mut description_ok = true;
-        let mut review_ok = true;
 
         // Assign the "reviewed" label if there is one and the PR is approved
         if let Some(label) = self.config.reviewed_label.clone() {
-            let pr_approved = self.pr_approved().await?;
             actions.set_label(label, pr_approved);
-            review_ok = pr_approved;
         }
 
         // Assign the "needs-description" label if there is one and the PR lacks one
@@ -110,18 +108,19 @@ impl<'a> Analyzer<'a> {
         actions.set_label(self.config.ci_passed_label.to_string(), statuses_passed);
 
         actions.set_merge(
-            !self.block_merge_label_applied() && description_ok && review_ok && statuses_passed,
+            !self.block_merge_label_applied() && description_ok && pr_approved && statuses_passed,
         );
 
         return Ok(actions);
     }
 
     async fn pr_approved(&mut self) -> Result<bool> {
+        let review_not_required = self.config.reviewed_label.is_none();
         let mut waiting = false;
-        let mut approved = false;
+        let mut approved = review_not_required;
         for review in self.pr_reviews().await?.iter() {
             match review {
-                ReviewState::Approved => approved = true,
+                ReviewState::Approved => approved = review_not_required || true,
                 ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
                 _ => (),
             }
