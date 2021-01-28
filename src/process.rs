@@ -15,6 +15,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct PR {
     pub id: u64,
+    pub number: u64,
     pub commit_sha: String,
     draft: bool,
     state: models::IssueState,
@@ -33,6 +34,7 @@ impl PR {
             .collect();
         Self {
             id: pr.id,
+            number: pr.number,
             commit_sha: pr.head.sha,
             draft: pr.draft,
             state: pr.state,
@@ -71,18 +73,17 @@ impl<'a> Analyzer<'a> {
         let mut actions = Actions::noop();
 
         if pr.draft {
-            log::info!("PR #{} is a draft, nothing to do", pr.id);
+            log::info!("PR #{}: Draft, nothing to do", pr.number);
             return Ok(actions);
         }
 
         if pr.state == IssueState::Closed {
-            log::info!("PR #{} is closed, nothing to do", pr.id);
+            log::info!("PR #{}: Closed, nothing to do", pr.number);
             return Ok(actions);
         }
 
-        let fresh = Duration::minutes(60);
-        if pr.updated_at < Utc::now() - fresh {
-            log::info!("PR #{} inactive for > #{}, nothing to do", pr.id, fresh);
+        if pr.updated_at < Utc::now() - Duration::minutes(60) {
+            log::info!("PR #{}: Inactive for over 1 hour, nothing to do", pr.number);
             return Ok(actions);
         }
 
@@ -150,8 +151,9 @@ impl<'a> Analyzer<'a> {
         match &self.reviews {
             RemoteData::Local(reviews) => Ok(reviews.clone()),
             RemoteData::Remote => Ok(client_request!(self.client, pulls)
-                .list_reviews(self.pr.id)
-                .await?
+                .list_reviews(self.pr.number)
+                .await
+                .context("Could not get reviews for PR")?
                 .into_iter()
                 .flat_map(|review| review.state)
                 .collect()),
@@ -165,7 +167,8 @@ impl<'a> Analyzer<'a> {
                 .combined_status_for_ref(&octocrab::params::repos::Reference::Commit(
                     self.pr.commit_sha.clone(),
                 ))
-                .await?
+                .await
+                .context("Could not get statuses for commit")?
                 .statuses
                 .into_iter()
                 .flat_map(|status| Some((status.context?, status.state)))

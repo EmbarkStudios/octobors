@@ -177,32 +177,32 @@ impl Config {
         }
 
         Ok(Self {
-            needs_description_label: read_input("needs-description-label")
+            needs_description_label: read_input("needs_description_label")
                 .ok()
                 .filter(|label| !label.is_empty()),
             required_statuses: {
-                let rs = read_input("required-statuses").map(to_vec)?;
+                let rs = read_input("required_statuses").map(to_vec)?;
 
                 if rs.is_empty() {
-                    anyhow::bail!("must supply 1 or more valid 'required-statuses'");
+                    anyhow::bail!("must supply 1 or more valid 'required_statuses'");
                 } else {
                     rs
                 }
             },
-            ci_passed_label: read_input("ci-passed-label").and_then(|label| {
+            ci_passed_label: read_input("ci_passed_label").and_then(|label| {
                 if label.is_empty() {
-                    anyhow::bail!("'ci-passed-label' is required to be a valid value");
+                    anyhow::bail!("'ci_passed_label' is required to be a valid value");
                 } else {
                     Ok(label)
                 }
             })?,
-            reviewed_label: read_input("reviewed-label")
+            reviewed_label: read_input("reviewed_label")
                 .ok()
                 .filter(|label| !label.is_empty()),
-            block_merge_label: read_input("block-merge-label")
+            block_merge_label: read_input("block_merge_label")
                 .ok()
                 .filter(|label| !label.is_empty()),
-            automerge_grace_period: read_input("automerge-grace-period")
+            automerge_grace_period: read_input("automerge_grace_period")
                 .and_then(|gp| {
                     if gp.is_empty() {
                         anyhow::bail!("ignoring empty string");
@@ -214,7 +214,7 @@ impl Config {
                     }
                 })
                 .ok(),
-            merge_method: read_input("merge-method")
+            merge_method: read_input("merge_method")
                 .map(|mm| {
                     use octocrab::params::pulls::MergeMethod as MM;
 

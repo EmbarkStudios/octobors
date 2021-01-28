@@ -32,10 +32,10 @@ runs:
   image: "action.dockerfile"
   env:
     GITHUB_TOKEN: ${{ inputs.github-token }}
-    INPUT_NEEDS-DESCRIPTION-LABEL: ${{ inputs.needs-description-label }}
-    INPUT_REQUIRED-STATUSES: ${{ inputs.required-statuses }}
-    INPUT_CI-PASSED-LABEL: ${{ inputs.ci-passed-label }}
-    INPUT_REVIEWED-LABEL: ${{ inputs.waiting-for-review-label }}
-    INPUT_BLOCK-MERGE-LABEL: ${{ inputs.block-merge-label }}
-    INPUT_AUTOMERGE-GRACE-PERIOD: ${{ inputs.automerge-grace-period }}
-    INPUT_MERGE-METHOD: ${{ inputs.merge-method }}
+    INPUT_NEEDS_DESCRIPTION_LABEL: ${{ inputs.needs-description-label }}
+    INPUT_REQUIRED_STATUSES: ${{ inputs.required-statuses }}
+    INPUT_CI_PASSED_LABEL: ${{ inputs.ci-passed-label }}
+    INPUT_REVIEWED_LABEL: ${{ inputs.waiting-for-review-label }}
+    INPUT_BLOCK_MERGE_LABEL: ${{ inputs.block-merge-label }}
+    INPUT_AUTOMERGE_GRACE_PERIOD: ${{ inputs.automerge-grace-period }}
+    INPUT_MERGE_METHOD: ${{ inputs.merge-method }}
