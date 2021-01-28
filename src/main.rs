@@ -14,7 +14,9 @@ async fn real_main() -> Result<(), Error> {
 
     log::debug!("configuration: {:#?}", app.config);
 
-    octobors::Octobors::new()?.process_pull_requests().await?;
+    app.process_pull_requests().await?;
+
+    // octobors::Octobors::new()?.process_pull_requests().await?;
 
     Ok(())
 }

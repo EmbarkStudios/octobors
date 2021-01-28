@@ -57,7 +57,9 @@ impl Client {
     /// handled. This is OK as we are not interested in outdated PRs as they
     /// won't have been updated since we last checked.
     pub async fn get_pull_requests(&self) -> Result<Vec<models::pulls::PullRequest>> {
-        Ok(client_request!(self, pulls)
+        Ok(self
+            .inner
+            .pulls(&self.owner, &self.repo)
             .list()
             .state(octocrab::params::State::Open)
             .direction(Direction::Descending)

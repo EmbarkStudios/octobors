@@ -14,7 +14,8 @@ mod tests;
 
 #[derive(Debug, Clone)]
 pub struct PR {
-    id: u64,
+    pub id: u64,
+    pub commit_sha: String,
     draft: bool,
     state: models::IssueState,
     updated_at: DateTime<Utc>,
@@ -32,6 +33,7 @@ impl PR {
             .collect();
         Self {
             id: pr.id,
+            commit_sha: pr.head.sha,
             draft: pr.draft,
             state: pr.state,
             updated_at: pr.updated_at.unwrap_or(pr.created_at),
@@ -42,30 +44,29 @@ impl PR {
 }
 
 pub struct Analyzer<'a> {
-    pr: PR,
+    pr: &'a PR,
     client: &'a context::Client,
     config: &'a context::Config,
-    // We optionally keep a cached version of these fields using `RemoteData`
-    // so that the method can be called a second time without side effects,
-    // and also so we can pre-seed the cache with values in order to not hit
-    // the GitHub API in unit tests
+    // We optionally keep a local version of these fields using `RemoteData`
+    // so we can pre-set the data with values in order to not hit the GitHub
+    // API in unit tests
     reviews: RemoteData<Vec<ReviewState>>,
     statuses: RemoteData<HashMap<String, StatusState>>,
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn new(pr: PR, client: &'a context::Client, config: &'a context::Config) -> Self {
+    pub fn new(pr: &'a PR, client: &'a context::Client, config: &'a context::Config) -> Self {
         Self {
             pr,
             client,
             config,
-            reviews: RemoteData::NotFetched,
-            statuses: RemoteData::NotFetched,
+            reviews: RemoteData::Remote,
+            statuses: RemoteData::Remote,
         }
     }
 
     /// Analyze a PR to determine what actions need to be undertaken.
-    pub async fn required_actions(&mut self) -> Result<Actions> {
+    pub async fn required_actions(&self) -> Result<Actions> {
         let pr = &self.pr;
         let mut actions = Actions::noop();
 
@@ -114,11 +115,11 @@ impl<'a> Analyzer<'a> {
         return Ok(actions);
     }
 
-    async fn pr_approved(&mut self) -> Result<bool> {
+    async fn pr_approved(&self) -> Result<bool> {
         let review_not_required = self.config.reviewed_label.is_none();
         let mut waiting = false;
         let mut approved = review_not_required;
-        for review in self.pr_reviews().await?.iter() {
+        for review in self.get_pr_reviews().await?.iter() {
             match review {
                 ReviewState::Approved => approved = review_not_required || true,
                 ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
@@ -128,9 +129,10 @@ impl<'a> Analyzer<'a> {
         Ok(approved && !waiting)
     }
 
-    async fn pr_statuses_passed(&mut self) -> Result<bool> {
+    async fn pr_statuses_passed(&self) -> Result<bool> {
+        let statuses = self.get_pr_statuses().await?;
         for required in &self.config.required_statuses {
-            if !self.status_passed(required).await? {
+            if statuses.get(required) != Some(&StatusState::Success) {
                 return Ok(false);
             }
         }
@@ -144,21 +146,30 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    async fn pr_reviews(&mut self) -> Result<&Vec<ReviewState>> {
+    async fn get_pr_reviews(&self) -> Result<Vec<ReviewState>> {
         match &self.reviews {
-            RemoteData::Fetched(reviews) => Ok(&reviews),
-            RemoteData::NotFetched => todo!(),
+            RemoteData::Local(reviews) => Ok(reviews.clone()),
+            RemoteData::Remote => Ok(client_request!(self.client, pulls)
+                .list_reviews(self.pr.id)
+                .await?
+                .into_iter()
+                .flat_map(|review| review.state)
+                .collect()),
         }
     }
 
-    async fn status_passed(&mut self, name: &str) -> Result<bool> {
-        Ok(self.pr_statuses().await?.get(name) == Some(&StatusState::Success))
-    }
-
-    async fn pr_statuses(&mut self) -> Result<&HashMap<String, StatusState>> {
+    async fn get_pr_statuses(&self) -> Result<HashMap<String, StatusState>> {
         match &self.statuses {
-            RemoteData::Fetched(statuses) => Ok(&statuses),
-            RemoteData::NotFetched => todo!(),
+            RemoteData::Local(statuses) => Ok(statuses.clone()),
+            RemoteData::Remote => Ok(client_request!(self.client, repos)
+                .combined_status_for_ref(&octocrab::params::repos::Reference::Commit(
+                    self.pr.commit_sha.clone(),
+                ))
+                .await?
+                .statuses
+                .into_iter()
+                .flat_map(|status| Some((status.context?, status.state)))
+                .collect()),
         }
     }
 }
@@ -171,8 +182,8 @@ pub struct Actions {
 }
 
 pub enum RemoteData<T> {
-    NotFetched,
-    Fetched(T),
+    Remote,
+    Local(T),
 }
 
 impl Actions {
