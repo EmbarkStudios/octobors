@@ -65,6 +65,22 @@ async fn ok_pr_actions() {
 }
 
 #[tokio::test]
+async fn merge_blocked_by_label() {
+    let (mut pr, client, mut config) = make_context();
+    config.block_merge_label = Some("blocked!".to_string());
+    pr.labels.insert("blocked!".to_string());
+    let analyzer = make_analyzer(&pr, &client, &config);
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(false)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
+
+#[tokio::test]
 async fn draft_pr_actions() {
     let (mut pr, client, config) = make_context();
     pr.draft = true;

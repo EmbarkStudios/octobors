@@ -96,12 +96,6 @@ impl<'a> Analyzer<'a> {
         let statuses_passed = self.pr_statuses_passed().await?;
         let pr_approved = self.pr_approved().await?;
         let mut description_ok = true;
-        let mut outside_grace_period = true;
-
-        if let Some(grace_period) = &self.config.automerge_grace_period {
-            let grace_period = Duration::seconds(*grace_period as i64);
-            outside_grace_period = Utc::now() - grace_period > pr.updated_at;
-        }
 
         if let Some(label) = &self.config.reviewed_label {
             actions.set_label(label, Presence::should_be_present(pr_approved));
@@ -118,11 +112,11 @@ impl<'a> Analyzer<'a> {
         );
 
         actions.set_merge(
-            !self.block_merge_label_applied()
+            self.merge_blocked_by_label()
+                && self.outside_grace_period()
                 && description_ok
                 && pr_approved
-                && statuses_passed
-                && outside_grace_period,
+                && statuses_passed,
         );
 
         return Ok(actions);
@@ -158,10 +152,19 @@ impl<'a> Analyzer<'a> {
         return Ok(true);
     }
 
-    fn block_merge_label_applied(&self) -> bool {
+    fn merge_blocked_by_label(&self) -> bool {
         match &self.config.block_merge_label {
             None => false,
-            Some(label) => self.pr.labels.contains(label),
+            Some(label) => !self.pr.labels.contains(label),
+        }
+    }
+
+    fn outside_grace_period(&self) -> bool {
+        match &self.config.automerge_grace_period {
+            None => true,
+            Some(grace_period) => {
+                Utc::now() - Duration::seconds(*grace_period as i64) > self.pr.updated_at
+            }
         }
     }
 
