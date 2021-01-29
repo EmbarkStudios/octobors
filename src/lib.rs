@@ -3,6 +3,7 @@ mod merge;
 pub mod process;
 
 use anyhow::Result;
+use process::{Actions, Analyzer, PR};
 
 pub struct Octobors {
     pub config: context::Config,
@@ -34,18 +35,31 @@ impl Octobors {
     }
 
     async fn process(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
-        let pr = process::PR::from_octocrab_pull_request(pr);
+        let pr = PR::from_octocrab_pull_request(pr);
         log::info!("PR #{}: Processing", pr.number);
 
-        // Analyze the PR to determine if there is anything we need to do
-        let actions = process::Analyzer::new(&pr, &self.client, &self.config)
+        let actions = Analyzer::new(&pr, &self.client, &self.config)
             .required_actions()
             .await?;
         log::info!("PR #{}: {:?}", pr.number, actions);
 
-        // TODO: apply labels
-        // TODO: merge if needed
+        self.apply(actions, &pr).await?;
 
+        log::info!("PR #{}: Done", pr.number);
+        Ok(())
+    }
+
+    pub async fn apply(&self, actions: Actions, pr: &PR) -> Result<()> {
+        let mut labels = pr.labels.iter().cloned().collect();
+        let client = &self.client;
+        let num = pr.number;
+        process::remove_labels(client, num, &mut labels, actions.remove_labels.into_iter()).await?;
+        process::add_labels(client, num, &mut labels, actions.add_labels.into_iter()).await?;
+
+        if actions.merge {
+            log::info!("PR #{}: Attempting to merge", pr.number);
+            merge::queue(&self.client, pr, &self.config).await?;
+        }
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 /// Queues the pull request for merging
 pub async fn queue(
     client: &crate::context::Client,
-    pr: octocrab::models::pulls::PullRequest,
+    pr: &crate::process::PR,
     config: &crate::context::Config,
 ) -> Result<(), anyhow::Error> {
     // Wait some amount of time before actually attempting the merge if the
@@ -20,12 +20,6 @@ pub async fn queue(
         // See https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-git-database-api#checking-mergeability-of-pull-requests
         // for why we rerequest the PR instead of using a small graphql query
         let pr = prh.get(pr.number).await?;
-
-        let labels: Vec<_> = pr
-            .labels
-            .as_ref()
-            .map(|labels| labels.iter().map(|l| l.name.clone()).collect())
-            .unwrap_or_default();
 
         use octocrab::models::pulls::MergeableState;
 

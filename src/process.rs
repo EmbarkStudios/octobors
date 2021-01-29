@@ -17,11 +17,11 @@ pub struct PR {
     pub id: u64,
     pub number: u64,
     pub commit_sha: String,
-    draft: bool,
-    state: models::IssueState,
-    updated_at: DateTime<Utc>,
-    labels: HashSet<String>,
-    has_description: bool,
+    pub draft: bool,
+    pub state: models::IssueState,
+    pub updated_at: DateTime<Utc>,
+    pub labels: HashSet<String>,
+    pub has_description: bool,
 }
 
 impl PR {
@@ -234,9 +234,9 @@ impl Presence {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Actions {
-    merge: bool,
-    add_labels: HashSet<String>,
-    remove_labels: HashSet<String>,
+    pub merge: bool,
+    pub add_labels: HashSet<String>,
+    pub remove_labels: HashSet<String>,
 }
 
 impl Actions {
@@ -258,28 +258,13 @@ impl Actions {
     }
 }
 
-async fn process_pr(_client: &context::Client, _cfg: &context::Config) -> Result<(), Error> {
-    // add_labels(client, pr_number, &mut labels, &labels_to_add).await?;
-    // remove_labels(client, pr_number, &mut labels, &labels_to_remove).await?;
-
-    // if can_merge {
-    //     log::warn!(
-    //         "PR #{} has met all automerge requirements, queuing for merge...",
-    //         pr_number
-    //     );
-    //     crate::merge::queue(&client, pr.pr, &cfg).await?;
-    // }
-
-    Ok(())
-}
-
 #[inline]
 fn has_label(labels: &[String], name: &str) -> Option<usize> {
     labels.iter().position(|label| label == name)
 }
 
 /// Adds one or more labels to the PR. Only adds labels that aren't already present.
-async fn add_labels(
+pub async fn add_labels(
     client: &context::Client,
     pr_number: u64,
     labels: &mut Vec<String>,
@@ -298,7 +283,7 @@ async fn add_labels(
         return Ok(());
     }
 
-    log::debug!("Adding labels {:?}", to_add);
+    log::info!("PR #{}: Adding labels {:?}", pr_number, to_add);
 
     let ih = client_request!(client, issues);
 
@@ -315,7 +300,7 @@ async fn add_labels(
 
 /// Removes one or more labels from the PR. Only removes labels that are actually
 /// on the PR.
-async fn remove_labels(
+pub async fn remove_labels(
     client: &context::Client,
     pr_number: u64,
     labels: &mut Vec<String>,
@@ -336,7 +321,7 @@ async fn remove_labels(
         return Ok(());
     }
 
-    log::debug!("Removing labels {:?}", to_remove);
+    log::info!("PR #{}: Removing labels {:?}", pr_number, to_remove);
 
     let ih = client_request!(client, issues);
 
