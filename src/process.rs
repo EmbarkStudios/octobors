@@ -96,18 +96,21 @@ impl<'a> Analyzer<'a> {
         let mut description_ok = true;
 
         // Assign the "reviewed" label if there is one and the PR is approved
-        if let Some(label) = self.config.reviewed_label.clone() {
-            actions.set_label(label, pr_approved);
+        if let Some(label) = &self.config.reviewed_label {
+            actions.set_label(label, Presence::should_be_present(pr_approved));
         }
 
         // Assign the "needs-description" label if there is one and the PR lacks one
-        if let Some(label) = self.config.needs_description_label.clone() {
+        if let Some(label) = &self.config.needs_description_label {
             description_ok = self.pr.has_description;
-            actions.set_label(label, !self.pr.has_description);
+            actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
         }
 
         // Assign the "ci-passed" label if CI passed
-        actions.set_label(self.config.ci_passed_label.to_string(), statuses_passed);
+        actions.set_label(
+            &self.config.ci_passed_label,
+            Presence::should_be_present(statuses_passed),
+        );
 
         actions.set_merge(
             !self.block_merge_label_applied() && description_ok && pr_approved && statuses_passed,
@@ -177,16 +180,32 @@ impl<'a> Analyzer<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteData<T> {
+    Remote,
+    Local(T),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Presence {
+    Present,
+    Absent,
+}
+
+impl Presence {
+    fn should_be_present(should: bool) -> Self {
+        if should {
+            Self::Present
+        } else {
+            Self::Absent
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Actions {
     merge: bool,
     add_labels: HashSet<String>,
     remove_labels: HashSet<String>,
-}
-
-pub enum RemoteData<T> {
-    Remote,
-    Local(T),
 }
 
 impl Actions {
@@ -194,28 +213,17 @@ impl Actions {
         Self::default()
     }
 
-    pub fn set_label(&mut self, label: String, should_be_present: bool) -> &mut Self {
-        if should_be_present {
-            self.add_labels.insert(label);
-        } else {
-            self.remove_labels.insert(label);
-        }
+    pub fn set_label(&mut self, label: &str, precence: Presence) -> &mut Self {
+        match precence {
+            Presence::Present => self.add_labels.insert(label.to_string()),
+            Presence::Absent => self.remove_labels.insert(label.to_string()),
+        };
         self
     }
 
     pub fn set_merge(&mut self, should_merge: bool) -> &mut Self {
         self.merge = should_merge;
         self
-    }
-}
-
-impl Default for Actions {
-    fn default() -> Self {
-        Self {
-            merge: false,
-            add_labels: Default::default(),
-            remove_labels: Default::default(),
-        }
     }
 }
 

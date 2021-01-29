@@ -11,14 +11,8 @@ async fn main() -> Result<(), Error> {
 async fn real_main() -> Result<(), Error> {
     hook_logger()?;
     let app = octobors::Octobors::new()?;
-
     log::debug!("configuration: {:#?}", app.config);
-
-    app.process_pull_requests().await?;
-
-    // octobors::Octobors::new()?.process_pull_requests().await?;
-
-    Ok(())
+    app.process_pull_requests().await
 }
 
 fn hook_logger() -> Result<(), Error> {

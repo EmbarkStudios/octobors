@@ -31,10 +31,8 @@ impl Client {
     }
 
     pub fn new_from_env() -> Result<Self, Error> {
-        // Read GitHub API token
         let token = read_env("GITHUB_TOKEN")?;
 
-        // Determine owner and name of repo
         let repo = read_env("GITHUB_REPOSITORY")?;
         let (owner, name) = {
             let mut it = repo.split('/');

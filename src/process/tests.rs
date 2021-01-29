@@ -58,9 +58,9 @@ async fn ok_pr_actions() {
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(true)
-            .set_label("reviewed".to_string(), true)
-            .set_label("ci-passed".to_string(), true)
-            .set_label("needs-description".to_string(), false)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
     );
 }
 
@@ -97,9 +97,9 @@ async fn no_description_pr_actions() {
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(false)
-            .set_label("reviewed".to_string(), true)
-            .set_label("ci-passed".to_string(), true)
-            .set_label("needs-description".to_string(), true)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Present)
     );
 }
 
@@ -113,8 +113,8 @@ async fn no_description_none_required_pr_actions() {
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(true)
-            .set_label("reviewed".to_string(), true)
-            .set_label("ci-passed".to_string(), true)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
     );
 }
 
@@ -128,8 +128,8 @@ async fn review_not_required_if_label_not_configured_pr_actions() {
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(true)
-            .set_label("ci-passed".to_string(), true)
-            .set_label("needs-description".to_string(), false)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
     );
 }
 
@@ -143,8 +143,8 @@ async fn changes_requested_still_blocks_if_label_not_configured() {
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(false)
-            .set_label("ci-passed".to_string(), true)
-            .set_label("needs-description".to_string(), false)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
     );
 }
 
@@ -155,14 +155,19 @@ async fn required_ci_not_passed_pr_actions() {
             let (pr, client, mut config) = make_context();
             config.required_statuses = vec!["required1".to_string(), "required2".to_string()];
             let mut analyzer = make_analyzer(&pr, &client, &config);
-            analyzer.statuses = RemoteData::Local($cases.into_iter().collect());
+            analyzer.statuses = RemoteData::Local(
+                $cases
+                    .into_iter()
+                    .map(|(a, b): (&str, StatusState)| (a.to_string(), b))
+                    .collect(),
+            );
             assert_eq!(
                 analyzer.required_actions().await.unwrap(),
                 *Actions::noop()
                     .set_merge(false)
-                    .set_label("reviewed".to_string(), true)
-                    .set_label("ci-passed".to_string(), false)
-                    .set_label("needs-description".to_string(), false)
+                    .set_label("reviewed", Presence::Present)
+                    .set_label("ci-passed", Presence::Absent)
+                    .set_label("needs-description", Presence::Absent)
             );
         }};
     }
@@ -171,56 +176,56 @@ async fn required_ci_not_passed_pr_actions() {
     assert_ci_failed_actions!(vec![]);
 
     // One pass, other missing
-    assert_ci_failed_actions!(vec![("required1".to_string(), StatusState::Success)]);
-    assert_ci_failed_actions!(vec![("required2".to_string(), StatusState::Success)]);
+    assert_ci_failed_actions!(vec![("required1", StatusState::Success)]);
+    assert_ci_failed_actions!(vec![("required2", StatusState::Success)]);
 
     // One passed, other failed
 
     assert_ci_failed_actions!(vec![
-        ("required2".to_string(), StatusState::Success),
-        ("required1".to_string(), StatusState::Error)
+        ("required2", StatusState::Success),
+        ("required1", StatusState::Error)
     ]);
     assert_ci_failed_actions!(vec![
-        ("required2".to_string(), StatusState::Success),
-        ("required1".to_string(), StatusState::Failure)
+        ("required2", StatusState::Success),
+        ("required1", StatusState::Failure)
     ]);
     assert_ci_failed_actions!(vec![
-        ("required2".to_string(), StatusState::Success),
-        ("required1".to_string(), StatusState::Pending)
+        ("required2", StatusState::Success),
+        ("required1", StatusState::Pending)
     ]);
     assert_ci_failed_actions!(vec![
-        ("required1".to_string(), StatusState::Success),
-        ("required2".to_string(), StatusState::Error)
+        ("required1", StatusState::Success),
+        ("required2", StatusState::Error)
     ]);
     assert_ci_failed_actions!(vec![
-        ("required1".to_string(), StatusState::Success),
-        ("required2".to_string(), StatusState::Failure)
+        ("required1", StatusState::Success),
+        ("required2", StatusState::Failure)
     ]);
     assert_ci_failed_actions!(vec![
-        ("required1".to_string(), StatusState::Success),
-        ("required2".to_string(), StatusState::Pending)
+        ("required1", StatusState::Success),
+        ("required2", StatusState::Pending)
     ]);
 
     // Failing statuses with a non-required pass
 
-    assert_ci_failed_actions!(vec![("not-required".to_string(), StatusState::Success)]);
+    assert_ci_failed_actions!(vec![("not-required", StatusState::Success)]);
 
     assert_ci_failed_actions!(vec![
-        ("not-required".to_string(), StatusState::Success),
-        ("required1".to_string(), StatusState::Error),
-        ("required2".to_string(), StatusState::Success),
+        ("not-required", StatusState::Success),
+        ("required1", StatusState::Error),
+        ("required2", StatusState::Success),
     ]);
 
     assert_ci_failed_actions!(vec![
-        ("required1".to_string(), StatusState::Failure),
-        ("not-required".to_string(), StatusState::Success),
-        ("required2".to_string(), StatusState::Success),
+        ("required1", StatusState::Failure),
+        ("not-required", StatusState::Success),
+        ("required2", StatusState::Success),
     ]);
 
     assert_ci_failed_actions!(vec![
-        ("required1".to_string(), StatusState::Pending),
-        ("not-required".to_string(), StatusState::Success),
-        ("required2".to_string(), StatusState::Success),
+        ("required1", StatusState::Pending),
+        ("not-required", StatusState::Success),
+        ("required2", StatusState::Success),
     ]);
 }
 
@@ -235,9 +240,9 @@ async fn review_approval_pr_actions() {
                 analyzer.required_actions().await.unwrap(),
                 *Actions::noop()
                     .set_merge($approved)
-                    .set_label("reviewed".to_string(), $approved)
-                    .set_label("ci-passed".to_string(), true)
-                    .set_label("needs-description".to_string(), false)
+                    .set_label("reviewed", Presence::should_be_present($approved))
+                    .set_label("ci-passed", Presence::Present)
+                    .set_label("needs-description", Presence::Absent)
             );
         }};
     }
