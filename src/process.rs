@@ -52,7 +52,7 @@ pub struct Analyzer<'a> {
     // We optionally keep a local version of these fields using `RemoteData`
     // so we can pre-set the data with values in order to not hit the GitHub
     // API in unit tests
-    reviews: RemoteData<Vec<ReviewState>>,
+    reviews: RemoteData<Vec<Review>>,
     statuses: RemoteData<HashMap<String, StatusState>>,
 }
 
@@ -123,7 +123,13 @@ impl<'a> Analyzer<'a> {
         let review_not_required = self.config.reviewed_label.is_none();
         let mut waiting = false;
         let mut approved = review_not_required;
-        for review in self.get_pr_reviews().await?.iter() {
+        let latest_reviews_per_person = self
+            .get_pr_reviews()
+            .await?
+            .into_iter()
+            .map(|review| (review.user_id, review.state))
+            .collect::<HashMap<_, _>>();
+        for review in latest_reviews_per_person.values() {
             match review {
                 ReviewState::Approved => approved = review_not_required || true,
                 ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
@@ -150,15 +156,16 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    async fn get_pr_reviews(&self) -> Result<Vec<ReviewState>> {
+    async fn get_pr_reviews(&self) -> Result<Vec<Review>> {
         match &self.reviews {
             RemoteData::Local(reviews) => Ok(reviews.clone()),
             RemoteData::Remote => Ok(client_request!(self.client, pulls)
                 .list_reviews(self.pr.number)
                 .await
                 .context("Could not get reviews for PR")?
-                .into_iter()
-                .flat_map(|review| review.state)
+                .items
+                .iter()
+                .flat_map(Review::from_octocrab_review)
                 .collect()),
         }
     }
@@ -177,6 +184,21 @@ impl<'a> Analyzer<'a> {
                 .flat_map(|status| Some((status.context?, status.state)))
                 .collect()),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Review {
+    user_id: i64,
+    state: ReviewState,
+}
+
+impl Review {
+    fn from_octocrab_review(review: &octocrab::models::pulls::Review) -> Option<Self> {
+        Some(Self {
+            user_id: review.user.id,
+            state: review.state?,
+        })
     }
 }
 
