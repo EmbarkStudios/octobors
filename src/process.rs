@@ -96,28 +96,33 @@ impl<'a> Analyzer<'a> {
         let statuses_passed = self.pr_statuses_passed().await?;
         let pr_approved = self.pr_approved().await?;
         let mut description_ok = true;
+        let mut outside_grace_period = true;
 
-        // TODO: ensure we are not within the grace period
+        if let Some(grace_period) = &self.config.automerge_grace_period {
+            let grace_period = Duration::seconds(*grace_period as i64);
+            outside_grace_period = Utc::now() - grace_period > pr.updated_at;
+        }
 
-        // Assign the "reviewed" label if there is one and the PR is approved
         if let Some(label) = &self.config.reviewed_label {
             actions.set_label(label, Presence::should_be_present(pr_approved));
         }
 
-        // Assign the "needs-description" label if there is one and the PR lacks one
         if let Some(label) = &self.config.needs_description_label {
             description_ok = self.pr.has_description;
             actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
         }
 
-        // Assign the "ci-passed" label if CI passed
         actions.set_label(
             &self.config.ci_passed_label,
             Presence::should_be_present(statuses_passed),
         );
 
         actions.set_merge(
-            !self.block_merge_label_applied() && description_ok && pr_approved && statuses_passed,
+            !self.block_merge_label_applied()
+                && description_ok
+                && pr_approved
+                && statuses_passed
+                && outside_grace_period,
         );
 
         return Ok(actions);

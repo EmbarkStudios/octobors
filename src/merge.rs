@@ -4,12 +4,6 @@ pub async fn queue(
     pr: &crate::process::PR,
     config: &crate::context::Config,
 ) -> Result<(), anyhow::Error> {
-    // Wait some amount of time before actually attempting the merge if the
-    // grace_period has been set
-    if let Some(gp) = config.automerge_grace_period {
-        tokio::time::sleep(std::time::Duration::from_millis(gp)).await;
-    }
-
     let pr_number = pr.number;
     let prh = crate::client_request!(client, pulls);
     let ish = crate::client_request!(client, issues);

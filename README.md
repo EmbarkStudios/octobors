@@ -100,7 +100,7 @@ can also stop automerging by marking a PR as a draft.
 
 #### `automerge-grace-period`
 
-Grace period (in milliseconds) from when a PR has entered into an automergeable
+Grace period (in seconds) from when a PR has entered into an automergeable
 state, and when a merge is first attempted.
 
 ### Events
