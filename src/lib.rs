@@ -18,22 +18,34 @@ impl Octobors {
     }
 
     pub async fn process_pull_requests(&self) -> Result<()> {
-        log::info!("Feching pull requests");
+        log::info!("Processing pull requests");
 
-        let prs = self.client.get_pull_requests().await?;
-
-        for pr in prs.into_iter() {
-            let pr = process::PR::from_octocrab_pull_request(pr);
-            log::info!("PR #{}: Processing", pr.number);
-
-            // Analyze the PR to determine if there is anything we need to do
-            let actions = process::Analyzer::new(&pr, &self.client, &self.config)
-                .required_actions()
-                .await?;
-            log::info!("PR #{}: {:?}", pr.number, actions);
-        }
+        futures::future::try_join_all(
+            self.client
+                .get_pull_requests()
+                .await?
+                .into_iter()
+                .map(|pr| self.process(pr)),
+        )
+        .await?;
 
         log::info!("Done");
+        Ok(())
+    }
+
+    async fn process(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
+        let pr = process::PR::from_octocrab_pull_request(pr);
+        log::info!("PR #{}: Processing", pr.number);
+
+        // Analyze the PR to determine if there is anything we need to do
+        let actions = process::Analyzer::new(&pr, &self.client, &self.config)
+            .required_actions()
+            .await?;
+        log::info!("PR #{}: {:?}", pr.number, actions);
+
+        // TODO: apply labels
+        // TODO: merge if needed
+
         Ok(())
     }
 }

@@ -21,6 +21,8 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 # Date and time data structures
 chrono = "0.4"
+# Futures combinators
+futures = "0.3.12"
 
 [patch.crates-io]
 # Patch to add a rustls feature. Also includes the latest from octocrab, which
