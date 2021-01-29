@@ -27,16 +27,6 @@ pub async fn queue(
             .map(|labels| labels.iter().map(|l| l.name.clone()).collect())
             .unwrap_or_default();
 
-        // We recheck the merge state as it's possible any number of things could
-        // have changed, especially if there was a grace period
-        if !crate::process::get_mergeable_state(pr.number, &labels, config) {
-            log::info!(
-                "PR #{} was mutated into an umergeable state after it was queued, aborting merge",
-                pr_number,
-            );
-            return Ok(());
-        }
-
         use octocrab::models::pulls::MergeableState;
 
         match pr.mergeable_state {
