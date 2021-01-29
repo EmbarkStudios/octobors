@@ -131,7 +131,7 @@ impl<'a> Analyzer<'a> {
             .collect::<HashMap<_, _>>();
         for review in latest_reviews_per_person.values() {
             match review {
-                ReviewState::Approved => approved = review_not_required || true,
+                ReviewState::Approved => approved = true,
                 ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
                 _ => (),
             }

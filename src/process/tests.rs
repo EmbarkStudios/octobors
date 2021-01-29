@@ -119,18 +119,29 @@ async fn no_description_none_required_pr_actions() {
 }
 
 #[tokio::test]
-async fn review_not_required_if_label_not_configured_pr_actions() {
-    let (pr, client, mut config) = make_context();
-    config.reviewed_label = None;
-    let mut analyzer = make_analyzer(&pr, &client, &config);
-    analyzer.reviews = RemoteData::Local(vec![]);
-    assert_eq!(
-        analyzer.required_actions().await.unwrap(),
-        *Actions::noop()
-            .set_merge(true)
-            .set_label("ci-passed", Presence::Present)
-            .set_label("needs-description", Presence::Absent)
-    );
+async fn review_not_required_if_label_not_configured() {
+    use ReviewState::{Approved, ChangesRequested, Commented, Pending};
+    macro_rules! assert_approved {
+        ($approved:expr, $cases:expr) => {{
+            let (pr, client, mut config) = make_context();
+            config.reviewed_label = None;
+            let mut analyzer = make_analyzer(&pr, &client, &config);
+            analyzer.reviews = RemoteData::Local($cases);
+            assert_eq!(
+                analyzer.required_actions().await.unwrap(),
+                *Actions::noop()
+                    .set_merge($approved)
+                    .set_label("ci-passed", Presence::Present)
+                    .set_label("needs-description", Presence::Absent)
+            );
+        }};
+    }
+
+    assert_approved!(true, vec![]);
+    assert_approved!(true, vec![review(1, Approved)]);
+    assert_approved!(true, vec![review(1, Commented)]);
+    assert_approved!(false, vec![review(1, ChangesRequested)]);
+    assert_approved!(false, vec![review(1, Pending)]);
 }
 
 #[tokio::test]
