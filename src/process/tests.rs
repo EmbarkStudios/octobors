@@ -12,7 +12,7 @@ fn make_context() -> (PR, context::Client, context::Config) {
         ci_passed_label: "ci-passed".to_string(),
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
-        automerge_grace_period: Some(1000),
+        automerge_grace_period: Some(10),
         merge_method: octocrab::params::pulls::MergeMethod::Rebase,
     };
     let pr = PR {
@@ -21,7 +21,7 @@ fn make_context() -> (PR, context::Client, context::Config) {
         commit_sha: "somesha".to_string(),
         draft: false,
         state: models::IssueState::Open,
-        updated_at: Utc::now(),
+        updated_at: Utc::now() - Duration::seconds(50),
         labels: HashSet::new(),
         has_description: true,
     };
@@ -289,4 +289,34 @@ async fn review_approval_pr_actions() {
 
 fn review(user_id: i64, state: ReviewState) -> Review {
     Review { user_id, state }
+}
+
+#[tokio::test]
+async fn grace_period_prevents_merge() {
+    macro_rules! assert_merge {
+        ($grace_period:expr, $updated_seconds_ago:expr, $merge:expr) => {{
+            let (mut pr, client, mut config) = make_context();
+            config.automerge_grace_period = $grace_period;
+            pr.updated_at = Utc::now() - Duration::seconds($updated_seconds_ago);
+            let analyzer = make_analyzer(&pr, &client, &config);
+            assert_eq!(
+                analyzer.required_actions().await.unwrap(),
+                *Actions::noop()
+                    .set_merge($merge)
+                    .set_label("reviewed", Presence::Present)
+                    .set_label("ci-passed", Presence::Present)
+                    .set_label("needs-description", Presence::Absent)
+            );
+        }};
+    }
+
+    // No grace period means it will always merge
+    assert_merge!(None, 0, true);
+    assert_merge!(None, -1, true);
+
+    // Falling within a grace period means it will not merge
+    assert_merge!(Some(1), 0, false);
+
+    // Falling after a grace period means it will merge
+    assert_merge!(Some(1), 2, true);
 }

@@ -141,7 +141,7 @@ pub struct Config {
     pub reviewed_label: Option<String>,
     /// Label that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
-    /// The period in milliseconds between when a PR can be automerged, and when
+    /// The period in seconds between when a PR can be automerged, and when
     /// the action actually tries to perform the merge
     pub automerge_grace_period: Option<u64>,
     /// The method to use for merging the PR, defaults to `merge` if we fail

@@ -18,7 +18,7 @@ inputs:
     description: "Label that can be applied manually to block automerges until it is removed"
     required: false
   automerge-grace-period:
-    description: "Time in milliseconds between when the action detects that the PR is automergeable, and when a merge is attempted"
+    description: "Time in seconds between when the action detects that the PR is automergeable, and when a merge is attempted"
     required: false
   merge-method:
     description: "The merge method to use when merging a PR"
