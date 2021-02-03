@@ -69,19 +69,19 @@ pub async fn queue(
                     // statuses we actually cared about have all passed, so we "should"
                     // be ok
                     MergeableState::Clean | MergeableState::HasHooks | MergeableState::Unstable => {
-                        let mut merge = prh
+                        let merge = prh
                             .merge(pr_number)
-                            .title(pr.title)
+                            .title(format!("{} (#{})", pr.title, pr_number))
                             .sha(pr.head.sha)
                             .method(
                                 config
                                     .merge_method
                                     .unwrap_or(octocrab::params::pulls::MergeMethod::Merge),
-                            );
-
-                        if let Some(body) = pr.body {
-                            merge = merge.message(body);
-                        }
+                            )
+                            .message(match pr.body {
+                                Some(body) => format!("{}\n\n{}", body, pr.url),
+                                None => pr.url,
+                            });
 
                         match merge.send().await {
                             Ok(res) => {
