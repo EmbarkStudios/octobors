@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{client_request, context};
+use crate::context;
 use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
 use models::{
@@ -48,7 +48,7 @@ impl PR {
 pub struct Analyzer<'a> {
     pr: &'a PR,
     client: &'a context::Client,
-    config: &'a context::Config,
+    config: &'a context::RepoConfig,
     // We optionally keep a local version of these fields using `RemoteData`
     // so we can pre-set the data with values in order to not hit the GitHub
     // API in unit tests
@@ -57,7 +57,7 @@ pub struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn new(pr: &'a PR, client: &'a context::Client, config: &'a context::Config) -> Self {
+    pub fn new(pr: &'a PR, client: &'a context::Client, config: &'a context::RepoConfig) -> Self {
         Self {
             pr,
             client,
@@ -171,32 +171,23 @@ impl<'a> Analyzer<'a> {
     async fn get_pr_reviews(&self) -> Result<Vec<Review>> {
         match &self.reviews {
             RemoteData::Local(reviews) => Ok(reviews.clone()),
-            RemoteData::Remote => {
-                let mut reviews = Vec::new();
-                let page = client_request!(self.client, pulls)
-                    .list_reviews(self.pr.number)
-                    .await
-                    .context("Could not get reviews for PR")?;
-                let mut page = Some(page);
-                while let Some(previous) = page {
-                    reviews.extend(previous.items.iter().flat_map(Review::from_octocrab_review));
-                    page = self.client.inner.get_page(&previous.next).await?;
-                }
-                Ok(reviews)
-            }
+            RemoteData::Remote => Ok(self
+                .client
+                .get_pull_request_reviews(self.config.name.as_str(), self.pr.number)
+                .await?
+                .iter()
+                .flat_map(Review::from_octocrab_review)
+                .collect()),
         }
     }
 
     async fn get_pr_statuses(&self) -> Result<HashMap<String, StatusState>> {
         match &self.statuses {
             RemoteData::Local(statuses) => Ok(statuses.clone()),
-            RemoteData::Remote => Ok(client_request!(self.client, repos)
-                .combined_status_for_ref(&octocrab::params::repos::Reference::Commit(
-                    self.pr.commit_sha.clone(),
-                ))
-                .await
-                .context("Could not get statuses for commit")?
-                .statuses
+            RemoteData::Remote => Ok(self
+                .client
+                .get_pull_request_statuses(&self.config.name, &self.pr)
+                .await?
                 .into_iter()
                 .flat_map(|status| Some((status.context?, status.state)))
                 .collect()),
@@ -211,7 +202,7 @@ pub struct Review {
 }
 
 impl Review {
-    fn from_octocrab_review(review: &octocrab::models::pulls::Review) -> Option<Self> {
+    pub fn from_octocrab_review(review: &octocrab::models::pulls::Review) -> Option<Self> {
         Some(Self {
             user_id: review.user.id,
             state: review.state?,
@@ -274,6 +265,7 @@ fn has_label(labels: &[String], name: &str) -> Option<usize> {
 /// Adds one or more labels to the PR. Only adds labels that aren't already present.
 pub async fn add_labels(
     client: &context::Client,
+    repo: &str,
     pr_number: u64,
     labels: &mut Vec<String>,
     to_add: impl IntoIterator<Item = impl AsRef<str>>,
@@ -293,7 +285,7 @@ pub async fn add_labels(
 
     log::info!("PR #{}: Adding labels {:?}", pr_number, to_add);
 
-    let ih = client_request!(client, issues);
+    let ih = client.inner.issues(&client.owner, repo);
 
     ih.add_labels(pr_number, &to_add)
         .await
@@ -310,6 +302,7 @@ pub async fn add_labels(
 /// on the PR.
 pub async fn remove_labels(
     client: &context::Client,
+    repo: &str,
     pr_number: u64,
     labels: &mut Vec<String>,
     to_remove: impl IntoIterator<Item = impl AsRef<str> + std::fmt::Debug>,
@@ -331,7 +324,7 @@ pub async fn remove_labels(
 
     log::info!("PR #{}: Removing labels {:?}", pr_number, to_remove);
 
-    let ih = client_request!(client, issues);
+    let ih = client.inner.issues(&client.owner, repo);
 
     for old_label in to_remove {
         if let Err(e) = ih.remove_label(pr_number, old_label.as_ref()).await {

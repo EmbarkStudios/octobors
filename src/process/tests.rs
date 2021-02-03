@@ -3,17 +3,17 @@ use models::IssueState;
 
 use super::*;
 
-fn make_context() -> (PR, context::Client, context::Config) {
-    let client =
-        context::Client::new("token".to_string(), "org".to_string(), "repo".to_string()).unwrap();
-    let config = context::Config {
+fn make_context() -> (PR, context::Client, context::RepoConfig) {
+    let client = context::Client::new("token".to_string(), "org".to_string()).unwrap();
+    let config = context::RepoConfig {
+        name: "the-project".to_string(),
         needs_description_label: Some("needs-description".to_string()),
         required_statuses: vec!["status1"].into_iter().map(String::from).collect(),
         ci_passed_label: "ci-passed".to_string(),
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
         automerge_grace_period: Some(10),
-        merge_method: octocrab::params::pulls::MergeMethod::Rebase,
+        merge_method: context::MergeMethod::Rebase,
     };
     let pr = PR {
         id: 13482,
@@ -31,7 +31,7 @@ fn make_context() -> (PR, context::Client, context::Config) {
 fn make_analyzer<'a>(
     pr: &'a PR,
     client: &'a context::Client,
-    config: &'a context::Config,
+    config: &'a context::RepoConfig,
 ) -> Analyzer<'a> {
     let mut analyzer = Analyzer::new(pr, client, config);
     analyzer.reviews = RemoteData::Local(vec![

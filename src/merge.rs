@@ -2,11 +2,11 @@
 pub async fn queue(
     client: &crate::context::Client,
     pr: &crate::process::PR,
-    config: &crate::context::Config,
+    config: &crate::context::RepoConfig,
 ) -> Result<(), anyhow::Error> {
     let pr_number = pr.number;
-    let prh = crate::client_request!(client, pulls);
-    let ish = crate::client_request!(client, issues);
+    let prh = client.inner.pulls(&client.owner, &config.name);
+    let ish = client.inner.issues(&client.owner, &config.name);
 
     let mut retry_count = 0u32;
 
