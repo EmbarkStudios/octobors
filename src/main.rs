@@ -1,21 +1,28 @@
-use anyhow::{Context as _, Error, Result};
+use std::path::PathBuf;
+
+use anyhow::{Context as _, Result};
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    real_main().await.map_err(|e| {
-        log::error!("{:#}", e);
-        e
-    })
-}
-
-async fn real_main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     hook_logger()?;
-    let app = octobors::Octobors::new()?;
+    let app = octobors::Octobors::new(&get_config_path()?)?;
     log::debug!("configuration: {:#?}", app.config);
-    app.process_pull_requests().await
+    app.process_all().await
 }
 
-fn hook_logger() -> Result<(), Error> {
+fn get_config_path() -> Result<PathBuf> {
+    let mut args = std::env::args();
+    let _ = args.next();
+    let path = args.next().context(
+        "Missing config file path command line argument
+
+Usage:
+    $ octobors path/to/config.toml",
+    )?;
+    Ok(PathBuf::from(path))
+}
+
+fn hook_logger() -> Result<()> {
     fern::Dispatch::new()
         .format(|out, message, record| {
             let command = match record.level() {

@@ -17,6 +17,8 @@ octocrab = { version = "0.8", default-features = false, features = ["rustls"] }
 serde = { version = "1.0", features = ["derive"] }
 # JSON support
 serde_json = "1.0"
+# TOML support
+toml = "0.5"
 # Async runtime
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 # Date and time data structures
