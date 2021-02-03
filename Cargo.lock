@@ -552,7 +552,7 @@ checksum = "8d3b63360ec3cb337817c2dbd47ab4a0f170d285d8e5a2064600f3def1402397"
 
 [[package]]
 name = "octobors"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "fern",

@@ -3,6 +3,10 @@ set -eu
 
 cmd="docker"
 
+sed -i -E "s/version = \"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$1\"/g" Cargo.toml
+
+cargo test
+
 if ! [[ $(command -v $cmd) ]]; then
     cmd="podman"
 fi

@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: automerge
-        uses: "EmbarkStudios/octobors@v1"
+        uses: "EmbarkStudios/octobors@0.3.0"
         with:
           github-token: "${{ secrets.BOT_TOKEN }}"
           merge-method: squash
