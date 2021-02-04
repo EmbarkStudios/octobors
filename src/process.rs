@@ -69,21 +69,22 @@ impl<'a> Analyzer<'a> {
 
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
+        let log = |msg: &str| log::info!("{}:{} {}", self.config.name, self.pr.number, msg);
         let pr = &self.pr;
         let mut actions = Actions::noop();
 
         if pr.draft {
-            log::info!("PR #{}: Draft, nothing to do", pr.number);
+            log("Draft, nothing to do");
             return Ok(actions);
         }
 
         if pr.state == IssueState::Closed {
-            log::info!("PR #{}: Closed, nothing to do", pr.number);
+            log("Closed, nothing to do");
             return Ok(actions);
         }
 
         if pr.updated_at < Utc::now() - Duration::minutes(60) {
-            log::info!("PR #{}: Inactive for over 1 hour, nothing to do", pr.number);
+            log("Inactive for over 1 hour, nothing to do");
             return Ok(actions);
         }
 
@@ -283,7 +284,7 @@ pub async fn add_labels(
         return Ok(());
     }
 
-    log::info!("PR #{}: Adding labels {:?}", pr_number, to_add);
+    log::debug!("#{}: Adding labels {:?}", pr_number, to_add);
 
     let ih = client.inner.issues(&client.owner, repo);
 
@@ -322,7 +323,7 @@ pub async fn remove_labels(
         return Ok(());
     }
 
-    log::info!("PR #{}: Removing labels {:?}", pr_number, to_remove);
+    log::debug!("#{}: Removing labels {:?}", pr_number, to_remove);
 
     let ih = client.inner.issues(&client.owner, repo);
 
