@@ -82,6 +82,8 @@ pub struct Config {
     pub owner: String,
     /// The repos to be run on, and their config
     pub repos: Vec<RepoConfig>,
+    /// Whether to skip applying the changes or not.
+    pub dry_run: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]

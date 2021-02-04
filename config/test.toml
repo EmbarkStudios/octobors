@@ -1,0 +1,17 @@
+owner = "lpil"
+dry_run = true
+
+[[repos]]
+name = "puter"
+ci_passed_label = "ci-passed"
+required_statuses = []
+
+[[repos]]
+name = "dotfiles"
+ci_passed_label = "ci-passed"
+required_statuses = []
+
+[[repos]]
+name = "archive"
+ci_passed_label = "ci-passed"
+required_statuses = []
