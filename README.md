@@ -27,7 +27,7 @@ Run the octobors binary, giving it a path to a config file containing the
 repos you wish to process. A GitHub token with write permission to the repo
 must be found in the `GITHUB_TOKEN` environment variable.
 
-See <config/example.toml> for the configuration that Octobors expects.
+See [config/example.toml](config/example.toml) for the configuration that Octobors expects.
 
 We recommend running this on a periodic schedule every minute using cron,
 Kubernetes Cronjobs, or similar. Unfortunately GitHub actions schedules can
