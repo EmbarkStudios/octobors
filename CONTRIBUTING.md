@@ -46,19 +46,18 @@ You can comment on the issue to let others know you're interested in working on 
 
 5. A maintainer will review your pull request and may ask you to make changes.
 
+### Releasing a new version
+
+Project maintainers can release a new version by updating the version in
+Cargo.toml/lock, committing, and pushing a git tag. This will trigger a new
+container image build which will then publish the new version to the docker
+registry.
+
 ## Code Guidelines
 
 ### Rust
 
 You can read about our standards and recommendations for working with Rust [here](https://github.com/EmbarkStudios/rust-ecosystem/blob/main/guidelines.md).
-
-### Python
-
-We recommend following [PEP8 conventions](https://www.python.org/dev/peps/pep-0008/) when working with Python modules.
-
-### JavaScript & TypeScript
-
-We use [Prettier](https://prettier.io/) with the default settings to auto-format our JavaScript and TypeScript code.
 
 ## Licensing
 
