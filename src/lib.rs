@@ -14,7 +14,9 @@ pub struct Octobors {
 impl Octobors {
     pub fn new(path: &Path) -> Result<Self> {
         let token = std::env::var("GITHUB_TOKEN")
-            .context("failed to read GITHUB_TOKEN environment variable")?;
+            .context("failed to read GITHUB_TOKEN environment variable")?
+            .trim()
+            .to_string();
         let contents = std::fs::read_to_string(path)?;
         let config: context::Config = toml::from_str(contents.as_str())?;
         let client = context::Client::new(token, config.owner.to_string())?;

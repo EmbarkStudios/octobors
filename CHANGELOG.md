@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.0]: https://github.com/EmbarkStudios/octobors/releases/tag/0.3.0
 [0.2.0]: https://github.com/EmbarkStudios/octobors/releases/tag/0.2.0
 
+## [1.0.1] - 2021-02-08
+### Added
+- The `GITHUB_TOKEN` environment variable is now trimmed of whitespace.
+
 ## [1.0.0] - 2021-02-08
 ### Added
 - Cron based design.
