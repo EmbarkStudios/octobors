@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Updated `octocrab` to 0.8.11.
 
+### Fixed
+- Requested reviews are now correctly taken into account when deciding
+  whether to merge a PR.
+
 ## [1.0.1] - 2021-02-08
 ### Added
 - The `GITHUB_TOKEN` environment variable is now trimmed of whitespace.

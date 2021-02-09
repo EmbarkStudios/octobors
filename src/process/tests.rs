@@ -24,6 +24,7 @@ fn make_context() -> (PR, context::Client, context::RepoConfig) {
         updated_at: Utc::now() - Duration::seconds(50),
         labels: HashSet::new(),
         has_description: true,
+        requested_reviewers_remaining: 0,
     };
     (pr, client, config)
 }
@@ -335,4 +336,24 @@ async fn grace_period_prevents_merge() {
 
     // Falling after a grace period means it will merge
     assert_merge!(Some(1), 2, true);
+}
+
+#[tokio::test]
+async fn requested_reviews() {
+    macro_rules! assert_merge {
+        ($requested_reviewers:expr, $merge:expr) => {{
+            let (mut pr, client, config) = make_context();
+            pr.requested_reviewers_remaining = $requested_reviewers;
+            let analyzer = make_analyzer(&pr, &client, &config);
+            assert_eq!(
+                analyzer.required_actions().await.unwrap().merge,
+                Actions::noop().set_merge($merge).merge
+            );
+        }};
+    }
+
+    assert_merge!(0, true);
+    assert_merge!(1, false);
+    assert_merge!(2, false);
+    assert_merge!(3, false);
 }

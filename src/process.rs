@@ -22,6 +22,7 @@ pub struct PR {
     pub updated_at: DateTime<Utc>,
     pub labels: HashSet<String>,
     pub has_description: bool,
+    pub requested_reviewers_remaining: usize,
 }
 
 impl PR {
@@ -40,6 +41,7 @@ impl PR {
             state: pr.state,
             updated_at: pr.updated_at.unwrap_or(pr.created_at),
             has_description: pr.body.unwrap_or_default() != "",
+            requested_reviewers_remaining: pr.requested_reviewers.len(),
             labels,
         }
     }
@@ -83,12 +85,15 @@ impl<'a> Analyzer<'a> {
             return Ok(actions);
         }
 
-        if pr.updated_at < Utc::now() - Duration::minutes(60) {
-            log("Inactive for over 1 hour, nothing to do");
+        if pr.updated_at < Utc::now() - Duration::minutes(10) {
+            log("Inactive for over 10 minutes, nothing to do");
             return Ok(actions);
         }
 
-        // TODO: check if the no-merge label is there
+        if pr.requested_reviewers_remaining != 0 {
+            log("Waiting on reviewers, nothing to do");
+            return Ok(actions);
+        }
 
         // Now that the basic checks have been passed we can gather information
         // from the GitHub API in order to do the full check. We do this second
