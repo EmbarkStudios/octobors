@@ -101,7 +101,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          name=$BIN_NAME
+          name=octobors
           tag=$(git describe --tags --abbrev=0)
           release_name="$name-$tag-${{ matrix.target }}"
           release_tar="${release_name}.tar.gz"
