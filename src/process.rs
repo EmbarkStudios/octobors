@@ -69,29 +69,32 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    fn log(&self, msg: &str) {
+        log::info!("{}:{} {}", self.config.name, self.pr.number, msg);
+    }
+
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
-        let log = |msg: &str| log::info!("{}:{} {}", self.config.name, self.pr.number, msg);
         let pr = &self.pr;
         let mut actions = Actions::noop();
 
         if pr.draft {
-            log("Draft, nothing to do");
+            self.log("Draft, nothing to do");
             return Ok(actions);
         }
 
         if pr.state == IssueState::Closed {
-            log("Closed, nothing to do");
+            self.log("Closed, nothing to do");
             return Ok(actions);
         }
 
         if pr.updated_at < Utc::now() - Duration::minutes(10) {
-            log("Inactive for over 10 minutes, nothing to do");
+            self.log("Inactive for over 10 minutes, nothing to do");
             return Ok(actions);
         }
 
         if pr.requested_reviewers_remaining != 0 {
-            log("Waiting on reviewers, nothing to do");
+            self.log("Waiting on reviewers, nothing to do");
             return Ok(actions);
         }
 
@@ -118,7 +121,7 @@ impl<'a> Analyzer<'a> {
         );
 
         actions.set_merge(
-            self.merge_blocked_by_label()
+            !self.merge_blocked_by_label()
                 && self.outside_grace_period()
                 && description_ok
                 && pr_approved
@@ -145,13 +148,19 @@ impl<'a> Analyzer<'a> {
                 _ => (),
             }
         }
-        Ok(approved && !waiting)
+        if approved && !waiting {
+            Ok(true)
+        } else {
+            self.log("Not yet approved by review");
+            Ok(false)
+        }
     }
 
     async fn pr_statuses_passed(&self) -> Result<bool> {
         let statuses = self.get_pr_statuses().await?;
         for required in &self.config.required_statuses {
             if statuses.get(required) != Some(&StatusState::Success) {
+                self.log(&format!("Required status `{}` has not passed", required));
                 return Ok(false);
             }
         }
@@ -161,7 +170,14 @@ impl<'a> Analyzer<'a> {
     fn merge_blocked_by_label(&self) -> bool {
         match &self.config.block_merge_label {
             None => false,
-            Some(label) => !self.pr.labels.contains(label),
+            Some(label) => {
+                if self.pr.labels.contains(label) {
+                    self.log("Merge blocked by label");
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -169,7 +185,12 @@ impl<'a> Analyzer<'a> {
         match &self.config.automerge_grace_period {
             None => true,
             Some(grace_period) => {
-                Utc::now() - Duration::seconds(*grace_period as i64) > self.pr.updated_at
+                if Utc::now() - Duration::seconds(*grace_period as i64) > self.pr.updated_at {
+                    true
+                } else {
+                    self.log("Within grace period, not merging");
+                    false
+                }
             }
         }
     }

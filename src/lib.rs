@@ -54,7 +54,6 @@ impl<'a> RepoProcessor<'a> {
     }
 
     pub async fn process(&self) -> Result<()> {
-        log::info!("{} Processing", self.repo_config.name);
         let futures = self
             .client
             .get_pull_requests(&self.repo_config.name)
@@ -62,25 +61,22 @@ impl<'a> RepoProcessor<'a> {
             .into_iter()
             .map(|pr| self.process_pr(pr));
         futures::future::try_join_all(futures).await?;
-        log::info!("{} Done", self.repo_config.name);
         Ok(())
     }
 
     async fn process_pr(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
         let pr = PR::from_octocrab_pull_request(pr);
         let log = |msg: &str| log::info!("{}:{} {}", self.repo_config.name, pr.number, msg);
-        log("Processing");
 
         let actions = Analyzer::new(&pr, &self.client, self.repo_config)
             .required_actions()
             .await?;
-        log(&format!("{:?}", &actions));
 
         if self.config.dry_run {
-            log("Dry run, doing nothing");
+            log(&format!("dry-run {:?}", &actions));
         } else {
+            log(&format!("applying {:?}", &actions));
             self.apply(actions, &pr).await?;
-            log("Actions applied");
         }
 
         Ok(())
