@@ -9,7 +9,7 @@ fn make_context() -> (PR, context::Client, context::RepoConfig) {
         name: "the-project".to_string(),
         needs_description_label: Some("needs-description".to_string()),
         required_statuses: vec!["status1"].into_iter().map(String::from).collect(),
-        ci_passed_label: "ci-passed".to_string(),
+        ci_passed_label: Some("ci-passed".to_string()),
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
         automerge_grace_period: Some(10),
@@ -175,6 +175,20 @@ async fn changes_requested_still_blocks_if_label_not_configured() {
         *Actions::noop()
             .set_merge(false)
             .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
+
+#[tokio::test]
+async fn no_ci_passed_label() {
+    let (pr, client, mut config) = make_context();
+    config.ci_passed_label = None;
+    let analyzer = make_analyzer(&pr, &client, &config);
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(true)
+            .set_label("reviewed", Presence::Present)
             .set_label("needs-description", Presence::Absent)
     );
 }

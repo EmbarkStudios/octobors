@@ -96,7 +96,7 @@ pub struct RepoConfig {
     /// automerged
     pub required_statuses: Vec<String>,
     /// The label applied when all of the PR's required status checks have passed
-    pub ci_passed_label: String,
+    pub ci_passed_label: Option<String>,
     /// Label applied when a PR has 1 or more reviewers and all of them are accepted
     pub reviewed_label: Option<String>,
     /// Label that can be manually added to PRs to block automerge

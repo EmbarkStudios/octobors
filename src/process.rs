@@ -115,10 +115,9 @@ impl<'a> Analyzer<'a> {
             actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
         }
 
-        actions.set_label(
-            &self.config.ci_passed_label,
-            Presence::should_be_present(statuses_passed),
-        );
+        if let Some(label) = &self.config.ci_passed_label {
+            actions.set_label(&label, Presence::should_be_present(statuses_passed));
+        }
 
         actions.set_merge(
             !self.merge_blocked_by_label()
