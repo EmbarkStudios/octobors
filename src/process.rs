@@ -88,8 +88,8 @@ impl<'a> Analyzer<'a> {
             return Ok(actions);
         }
 
-        if pr.updated_at < Utc::now() - Duration::minutes(10) {
-            self.log("Inactive for over 10 minutes, nothing to do");
+        if pr.updated_at < Utc::now() - Duration::minutes(60) {
+            self.log("Inactive for over 60 minutes, nothing to do");
             return Ok(actions);
         }
 
