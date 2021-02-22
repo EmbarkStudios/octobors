@@ -9,8 +9,9 @@ edition = "2018"
 anyhow = "1.0"
 # Simplify action logging
 fern = "0.6"
-# log macros
-log = "0.4"
+# logging and tracing macros
+tracing = "0.1"
+tracing-subscriber = "0.2"
 # Used for making all of the requests to github
 octocrab = { version = "0.8", default-features = false, features = ["rustls"] }
 # De/serialization support

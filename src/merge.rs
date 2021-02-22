@@ -1,3 +1,5 @@
+use tracing as log;
+
 /// Queues the pull request for merging
 pub async fn queue(
     client: &crate::context::Client,
@@ -22,7 +24,7 @@ pub async fn queue(
                 // Github started calculating the merge state of the PR if it hadn't
                 // already done so before our request, so if it didn't finish, we need
                 // to poll it again
-                log::warn!("Merge state for PR#{} is unknown, retrying", pr_number);
+                log::warn!("Merge state is unknown, retrying");
 
                 retry_count += 1;
                 tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -61,11 +63,7 @@ pub async fn queue(
                             Ok(res) => {
                                 // Even though the response contains a 'merged' boolean, the API docs
                                 // seem to indicate that this would never be false, so we just assume it merged
-                                log::info!(
-                                    "Successfully merged PR#{}: {}",
-                                    pr_number,
-                                    res.sha.unwrap_or_default()
-                                );
+                                log::info!("Successfully merged: {}", res.sha.unwrap_or_default());
 
                                 None
                             }
@@ -74,17 +72,13 @@ pub async fn queue(
                     }
                     MergeableState::Unknown => unreachable!(),
                     _ => {
-                        log::warn!("Ignoring unknown merge state {:?} for PR#{}", ms, pr_number);
+                        log::warn!("Ignoring unknown merge state {:?}", ms);
                         return Ok(());
                     }
                 };
 
                 if let Some(abort_reason) = abort_reason {
-                    log::warn!(
-                        "PR#{} was not able to automerge: {}",
-                        pr_number,
-                        abort_reason
-                    );
+                    log::warn!("not able to automerge: {}", abort_reason);
 
                     // Depending on how fast events get processed this might
                     // end up commenting multiple times

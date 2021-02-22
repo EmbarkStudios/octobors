@@ -3,8 +3,10 @@ mod merge;
 pub mod process;
 
 use anyhow::{Context, Result};
+use log::Instrument;
 use process::{Actions, Analyzer, PR};
 use std::path::Path;
+use tracing::{self as log, Level};
 
 pub struct Octobors {
     pub config: context::Config,
@@ -26,8 +28,11 @@ impl Octobors {
 
     pub async fn process_all(&self) -> Result<()> {
         for repo in self.config.repos.iter() {
+            let span = log::span!(Level::INFO, "repo", name = repo.name.as_str());
+
             RepoProcessor::new(&self.config, &self.client, repo)
                 .process()
+                .instrument(span)
                 .await?;
         }
         Ok(())
@@ -59,23 +64,25 @@ impl<'a> RepoProcessor<'a> {
             .get_pull_requests(&self.repo_config.name)
             .await?
             .into_iter()
-            .map(|pr| self.process_pr(pr));
+            .map(|pr| {
+                let span = log::span!(Level::INFO, "pr", number = pr.number);
+                self.process_pr(pr).instrument(span)
+            });
         futures::future::try_join_all(futures).await?;
         Ok(())
     }
 
     async fn process_pr(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
         let pr = PR::from_octocrab_pull_request(pr);
-        let log = |msg: &str| log::info!("{}:{} {}", self.repo_config.name, pr.number, msg);
 
         let actions = Analyzer::new(&pr, &self.client, self.repo_config)
             .required_actions()
             .await?;
 
         if self.config.dry_run {
-            log(&format!("dry-run {:?}", &actions));
+            log::info!("dry-run {:?}", actions);
         } else {
-            log(&format!("applying {:?}", &actions));
+            log::info!("applying {:?}", actions);
             self.apply(actions, &pr).await?;
         }
 
@@ -104,7 +111,7 @@ impl<'a> RepoProcessor<'a> {
         .await?;
 
         if actions.merge {
-            log::info!("PR #{}: Attempting to merge", pr.number);
+            log::info!("Attempting to merge");
             merge::queue(&self.client, pr, self.repo_config).await?;
         }
         Ok(())

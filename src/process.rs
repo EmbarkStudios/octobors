@@ -8,6 +8,7 @@ use models::{
     IssueState, StatusState,
 };
 use octocrab::models;
+use tracing as log;
 
 #[cfg(test)]
 mod tests;
@@ -69,32 +70,28 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn log(&self, msg: &str) {
-        log::info!("{}:{} {}", self.config.name, self.pr.number, msg);
-    }
-
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
         let pr = &self.pr;
         let mut actions = Actions::noop();
 
         if pr.draft {
-            self.log("Draft, nothing to do");
+            log::info!("Draft, nothing to do");
             return Ok(actions);
         }
 
         if pr.state == IssueState::Closed {
-            self.log("Closed, nothing to do");
+            log::info!("Closed, nothing to do");
             return Ok(actions);
         }
 
         if pr.updated_at < Utc::now() - Duration::minutes(60) {
-            self.log("Inactive for over 60 minutes, nothing to do");
+            log::info!("Inactive for over 60 minutes, nothing to do");
             return Ok(actions);
         }
 
         if pr.requested_reviewers_remaining != 0 {
-            self.log("Waiting on reviewers, nothing to do");
+            log::info!("Waiting on reviewers, nothing to do");
             return Ok(actions);
         }
 
@@ -134,9 +131,9 @@ impl<'a> Analyzer<'a> {
         let review_not_required = self.config.reviewed_label.is_none();
         let mut waiting = false;
         let mut approved = review_not_required;
-        let latest_reviews_per_person = self
-            .get_pr_reviews()
-            .await?
+        let reviews = self.get_pr_reviews().await?;
+        log::info!(reviews = ?reviews, "Got PR reviews");
+        let latest_reviews_per_person = reviews
             .into_iter()
             .map(|review| (review.user_id, review.state))
             .collect::<HashMap<_, _>>();
@@ -150,16 +147,17 @@ impl<'a> Analyzer<'a> {
         if approved && !waiting {
             Ok(true)
         } else {
-            self.log("Not yet approved by review");
+            log::info!("Not yet approved by review");
             Ok(false)
         }
     }
 
     async fn pr_statuses_passed(&self) -> Result<bool> {
         let statuses = self.get_pr_statuses().await?;
+        log::info!(statuses = ?statuses, "Got PR statuses");
         for required in &self.config.required_statuses {
             if statuses.get(required) != Some(&StatusState::Success) {
-                self.log(&format!("Required status `{}` has not passed", required));
+                log::info!("Required status `{}` has not passed", required);
                 return Ok(false);
             }
         }
@@ -171,7 +169,7 @@ impl<'a> Analyzer<'a> {
             None => false,
             Some(label) => {
                 if self.pr.labels.contains(label) {
-                    self.log("Merge blocked by label");
+                    log::info!("Merge blocked by label");
                     true
                 } else {
                     false
@@ -187,7 +185,7 @@ impl<'a> Analyzer<'a> {
                 if Utc::now() - Duration::seconds(*grace_period as i64) > self.pr.updated_at {
                     true
                 } else {
-                    self.log("Within grace period, not merging");
+                    log::info!("Within grace period, not merging");
                     false
                 }
             }
