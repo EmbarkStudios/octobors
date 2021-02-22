@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::context;
+use crate::{
+    context,
+    review::{Review, Reviews},
+};
 use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
-use models::{
-    pulls::{PullRequest, ReviewState},
-    IssueState, StatusState,
-};
+use models::{pulls::PullRequest, IssueState, StatusState};
 use octocrab::models;
 use tracing as log;
 
@@ -128,23 +128,11 @@ impl<'a> Analyzer<'a> {
     }
 
     async fn pr_approved(&self) -> Result<bool> {
-        let review_not_required = self.config.reviewed_label.is_none();
-        let mut waiting = false;
-        let mut approved = review_not_required;
+        let review_required = self.config.reviewed_label.is_some();
         let reviews = self.get_pr_reviews().await?;
-        log::info!(reviews = ?reviews, "Got PR reviews");
-        let latest_reviews_per_person = reviews
-            .into_iter()
-            .map(|review| (review.user_id, review.state))
-            .collect::<HashMap<_, _>>();
-        for review in latest_reviews_per_person.values() {
-            match review {
-                ReviewState::Approved => approved = true,
-                ReviewState::Pending | ReviewState::ChangesRequested => waiting = true,
-                _ => (),
-            }
-        }
-        if approved && !waiting {
+        log::debug!(reviews = ?reviews, "Got PR reviews");
+        let reviews = Reviews::new().record_reviews(reviews);
+        if reviews.approved(review_required) {
             Ok(true)
         } else {
             log::info!("Not yet approved by review");
@@ -154,7 +142,7 @@ impl<'a> Analyzer<'a> {
 
     async fn pr_statuses_passed(&self) -> Result<bool> {
         let statuses = self.get_pr_statuses().await?;
-        log::info!(statuses = ?statuses, "Got PR statuses");
+        log::debug!(statuses = ?statuses, "Got PR statuses");
         for required in &self.config.required_statuses {
             if statuses.get(required) != Some(&StatusState::Success) {
                 log::info!("Required status `{}` has not passed", required);
@@ -216,21 +204,6 @@ impl<'a> Analyzer<'a> {
                 .flat_map(|status| Some((status.context?, status.state)))
                 .collect()),
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Review {
-    user_id: i64,
-    state: ReviewState,
-}
-
-impl Review {
-    pub fn from_octocrab_review(review: &octocrab::models::pulls::Review) -> Option<Self> {
-        Some(Self {
-            user_id: review.user.id,
-            state: review.state?,
-        })
     }
 }
 
