@@ -8,7 +8,6 @@ pub async fn queue(
 ) -> Result<(), anyhow::Error> {
     let pr_number = pr.number;
     let prh = client.inner.pulls(&client.owner, &config.name);
-    let ish = client.inner.issues(&client.owner, &config.name);
 
     let mut retry_count = 0u32;
 
@@ -79,12 +78,6 @@ pub async fn queue(
 
                 if let Some(abort_reason) = abort_reason {
                     log::warn!("not able to automerge: {}", abort_reason);
-
-                    // Depending on how fast events get processed this might
-                    // end up commenting multiple times
-                    let _ = ish
-                        .create_comment(pr_number, format!("automerge aborted: {}", abort_reason))
-                        .await;
                 }
             }
         }

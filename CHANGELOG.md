@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.0]: https://github.com/EmbarkStudios/octobors/releases/tag/0.3.0
 [0.2.0]: https://github.com/EmbarkStudios/octobors/releases/tag/0.2.0
 
+## Unreleased
+### Removed
+- Octobors no longer leaves a comment when unable to merge. This was found to
+  be too noisy.
+
 ## [1.0.7] - 2021-02-23
 ### Added
 - Octobors now correctly handles replies to comments on reviews.
