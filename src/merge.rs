@@ -54,8 +54,8 @@ pub async fn queue(
                             .sha(pr.head.sha)
                             .method(config.merge_method)
                             .message(match pr.body {
-                                Some(body) => format!("{}\n\n{}", body, pr.url),
-                                None => pr.url,
+                                Some(body) => format!("{}\n\n{}", body, pr.html_url),
+                                None => pr.html_url.to_string(),
                             });
 
                         match merge.send().await {
