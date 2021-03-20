@@ -113,7 +113,7 @@ impl<'a> Analyzer<'a> {
         }
 
         if let Some(label) = &self.config.ci_passed_label {
-            actions.set_label(&label, Presence::should_be_present(statuses_passed));
+            actions.set_label(label, Presence::should_be_present(statuses_passed));
         }
 
         actions.set_merge(
@@ -198,7 +198,7 @@ impl<'a> Analyzer<'a> {
             RemoteData::Local(statuses) => Ok(statuses.clone()),
             RemoteData::Remote => Ok(self
                 .client
-                .get_pull_request_statuses(&self.config.name, &self.pr)
+                .get_pull_request_statuses(&self.config.name, self.pr)
                 .await?
                 .into_iter()
                 .flat_map(|status| Some((status.context?, status.state)))
@@ -272,7 +272,7 @@ pub async fn add_labels(
         .into_iter()
         .filter_map(|new_label| match has_label(labels, new_label.as_ref()) {
             None => Some(new_label.as_ref().to_owned()),
-            _ => None,
+            Some(_) => None,
         })
         .collect();
 
@@ -308,7 +308,7 @@ pub async fn remove_labels(
     let to_remove: Vec<_> = to_remove
         .into_iter()
         .filter_map(|old_label| {
-            has_label(&labels, old_label.as_ref()).map(|i| {
+            has_label(labels, old_label.as_ref()).map(|i| {
                 labels.remove(i);
                 old_label
             })

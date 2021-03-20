@@ -48,13 +48,13 @@ impl Reviews {
     }
 
     pub fn record_reviews(mut self, reviews: Vec<Review>) -> Self {
-        for review in reviews.into_iter() {
+        for review in reviews {
             self.record(review);
         }
         self
     }
 
-    /// Review a new review. Approve and ChangeRequested reviews overwrite
+    /// Review a new review. `Approved` and `ChangeRequested` reviews overwrite
     /// existing review state for the reviewer.
     fn record(&mut self, review: Review) {
         let status = match &review.state {
