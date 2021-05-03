@@ -75,7 +75,12 @@ impl Octobors {
             .to_string();
         let contents = std::fs::read_to_string(path)?;
         let config: context::Config = toml::from_str(contents.as_str())?;
-        let client = context::Client::new(token, config.owner.clone())?;
+        let client = context::Client::new(
+            token,
+            config.owner.to_string(),
+            config.github_api_base.as_ref().map(|s| s.as_str()),
+            config.extra_headers.as_slice(),
+        )?;
 
         Ok(Self { client, config })
     }

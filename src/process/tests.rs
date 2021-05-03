@@ -5,7 +5,7 @@ use octocrab::models::pulls::ReviewState;
 use super::*;
 
 fn make_context() -> (PR, context::Client, context::RepoConfig) {
-    let client = context::Client::new("token".to_string(), "org".to_string()).unwrap();
+    let client = context::Client::new("token".to_string(), "org".to_string(), None, &[]).unwrap();
     let config = context::RepoConfig {
         name: "the-project".to_string(),
         needs_description_label: Some("needs-description".to_string()),

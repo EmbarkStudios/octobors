@@ -35,7 +35,7 @@ impl PR {
             .map(|l| l.name)
             .collect();
         Self {
-            id: pr.id,
+            id: *pr.id,
             number: pr.number,
             commit_sha: pr.head.sha,
             draft: pr.draft,
