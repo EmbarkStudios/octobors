@@ -77,8 +77,8 @@ impl Octobors {
         let config: context::Config = toml::from_str(contents.as_str())?;
         let client = context::Client::new(
             token,
-            config.owner.to_string(),
-            config.github_api_base.as_ref().map(|s| s.as_str()),
+            config.owner.clone(),
+            config.github_api_base.as_deref(),
             config.extra_headers.as_slice(),
         )?;
 
