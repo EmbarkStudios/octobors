@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-[Unreleased]: https://github.com/EmbarkStudios/octobors/compare/1.0.9...HEAD
+[Unreleased]: https://github.com/EmbarkStudios/octobors/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/EmbarkStudios/octobors/releases/tag/1.1.0
 [1.0.9]: https://github.com/EmbarkStudios/octobors/releases/tag/1.0.9
 [1.0.8]: https://github.com/EmbarkStudios/octobors/releases/tag/1.0.8
 [1.0.7]: https://github.com/EmbarkStudios/octobors/releases/tag/1.0.7
@@ -19,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.2.0]: https://github.com/EmbarkStudios/octobors/releases/tag/0.2.0
 
 ## Unreleased
+### [1.1.0] - 2021-05-04
+- The `extra_headers` config key can be used to add additional API headers to every request to GitHub.
+- The `github_api_base` config key can be used to use a different base URL for requests to GitHub.
+
 ### [1.0.9] - 2021-03-10
 - Corrected the URL used in PR merge messages.
 
