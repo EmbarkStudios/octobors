@@ -76,7 +76,7 @@ impl Client {
     pub async fn get_pull_request_statuses(
         &self,
         repo: &str,
-        pr: &crate::process::PR,
+        pr: &crate::process::Pr,
     ) -> Result<Vec<models::Status>> {
         let reference = octocrab::params::repos::Reference::Commit(pr.commit_sha.clone());
         Ok(self

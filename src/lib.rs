@@ -58,7 +58,7 @@ mod review;
 
 use anyhow::{Context, Result};
 use log::Instrument;
-use process::{Actions, Analyzer, PR};
+use process::{Actions, Analyzer, Pr};
 use std::path::Path;
 use tracing::{self as log, Level};
 
@@ -132,7 +132,7 @@ impl<'a> RepoProcessor<'a> {
     }
 
     async fn process_pr(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
-        let pr = PR::from_octocrab_pull_request(pr);
+        let pr = Pr::from_octocrab_pull_request(pr);
 
         let actions = Analyzer::new(&pr, self.client, self.repo_config)
             .required_actions()
@@ -148,7 +148,7 @@ impl<'a> RepoProcessor<'a> {
         Ok(())
     }
 
-    pub async fn apply(&self, actions: Actions, pr: &PR) -> Result<()> {
+    pub async fn apply(&self, actions: Actions, pr: &Pr) -> Result<()> {
         let mut labels = pr.labels.iter().cloned().collect();
         let client = &self.client;
         let num = pr.number;

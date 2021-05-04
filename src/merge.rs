@@ -3,7 +3,7 @@ use tracing as log;
 /// Queues the pull request for merging
 pub async fn queue(
     client: &crate::context::Client,
-    pr: &crate::process::PR,
+    pr: &crate::process::Pr,
     config: &crate::context::RepoConfig,
 ) -> Result<(), anyhow::Error> {
     let pr_number = pr.number;
