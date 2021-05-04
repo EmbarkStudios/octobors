@@ -4,8 +4,8 @@ use octocrab::models::pulls::ReviewState;
 
 use super::*;
 
-fn make_context() -> (PR, context::Client, context::RepoConfig) {
-    let client = context::Client::new("token".to_string(), "org".to_string()).unwrap();
+fn make_context() -> (Pr, context::Client, context::RepoConfig) {
+    let client = context::Client::new("token".to_string(), "org".to_string(), None, &[]).unwrap();
     let config = context::RepoConfig {
         name: "the-project".to_string(),
         needs_description_label: Some("needs-description".to_string()),
@@ -16,7 +16,7 @@ fn make_context() -> (PR, context::Client, context::RepoConfig) {
         automerge_grace_period: Some(10),
         merge_method: context::MergeMethod::Rebase,
     };
-    let pr = PR {
+    let pr = Pr {
         id: 13482,
         number: 1,
         commit_sha: "somesha".to_string(),
@@ -31,7 +31,7 @@ fn make_context() -> (PR, context::Client, context::RepoConfig) {
 }
 
 fn make_analyzer<'a>(
-    pr: &'a PR,
+    pr: &'a Pr,
     client: &'a context::Client,
     config: &'a context::RepoConfig,
 ) -> Analyzer<'a> {

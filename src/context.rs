@@ -1,4 +1,5 @@
 use anyhow::{Context as _, Result};
+use http::header::HeaderName;
 use octocrab::{
     models,
     params::{pulls::Sort, Direction},
@@ -10,8 +11,21 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(token: String, owner: String) -> Result<Self> {
-        let inner = octocrab::OctocrabBuilder::new()
+    pub fn new(
+        token: String,
+        owner: String,
+        github_api_base: Option<&str>,
+        extra_headers: &[(String, String)],
+    ) -> Result<Self> {
+        let mut builder = octocrab::OctocrabBuilder::new();
+        if let Some(base_url) = github_api_base {
+            builder = builder.base_url(base_url)?;
+        };
+        for (key, value) in extra_headers {
+            let name = HeaderName::from_lowercase(key.to_lowercase().as_bytes())?;
+            builder = builder.add_header(name, value.to_string());
+        }
+        let inner = builder
             .personal_token(token)
             .build()
             .context("failed to create client")?;
@@ -62,7 +76,7 @@ impl Client {
     pub async fn get_pull_request_statuses(
         &self,
         repo: &str,
-        pr: &crate::process::PR,
+        pr: &crate::process::Pr,
     ) -> Result<Vec<models::Status>> {
         let reference = octocrab::params::repos::Reference::Commit(pr.commit_sha.clone());
         Ok(self
@@ -84,6 +98,11 @@ pub struct Config {
     pub repos: Vec<RepoConfig>,
     /// Whether to skip applying the changes or not.
     pub dry_run: bool,
+    /// The base URL to use GitHub API.  This may be useful if you are using a
+    /// proxy for the GitHub API or an enterprise installation.
+    pub github_api_base: Option<String>,
+    /// Extra headers to add to each request made to GitHub's API.
+    pub extra_headers: Vec<(String, String)>,
 }
 
 #[derive(Debug, serde::Deserialize)]

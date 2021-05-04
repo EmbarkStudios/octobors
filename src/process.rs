@@ -14,7 +14,7 @@ use tracing as log;
 mod tests;
 
 #[derive(Debug, Clone)]
-pub struct PR {
+pub struct Pr {
     pub id: u64,
     pub number: u64,
     pub commit_sha: String,
@@ -26,7 +26,7 @@ pub struct PR {
     pub requested_reviewers_remaining: usize,
 }
 
-impl PR {
+impl Pr {
     pub fn from_octocrab_pull_request(pr: PullRequest) -> Self {
         let labels = pr
             .labels
@@ -35,7 +35,7 @@ impl PR {
             .map(|l| l.name)
             .collect();
         Self {
-            id: pr.id,
+            id: *pr.id,
             number: pr.number,
             commit_sha: pr.head.sha,
             draft: pr.draft,
@@ -49,7 +49,7 @@ impl PR {
 }
 
 pub struct Analyzer<'a> {
-    pr: &'a PR,
+    pr: &'a Pr,
     client: &'a context::Client,
     config: &'a context::RepoConfig,
     // We optionally keep a local version of these fields using `RemoteData`
@@ -60,7 +60,7 @@ pub struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn new(pr: &'a PR, client: &'a context::Client, config: &'a context::RepoConfig) -> Self {
+    pub fn new(pr: &'a Pr, client: &'a context::Client, config: &'a context::RepoConfig) -> Self {
         Self {
             pr,
             client,
