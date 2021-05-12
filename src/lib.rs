@@ -82,7 +82,7 @@ impl Octobors {
             config.extra_headers.as_slice(),
         )?;
 
-        Ok(Self { client, config })
+        Ok(Self { config, client })
     }
 
     pub async fn process_all(&self) -> Result<()> {
