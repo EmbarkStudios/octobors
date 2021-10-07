@@ -8,8 +8,9 @@ unmaintained = "deny"
 yanked = "deny"
 notice = "warn"
 ignore = [
-    # Vulnerability in hyper's server code, which we don't use
-    "RUSTSEC-2021-0020"
+    # Vulnerabilities in hyper's server code, which we don't use
+    "RUSTSEC-2021-0078",
+    "RUSTSEC-2021-0079",
 ]
 
 [licenses]
@@ -53,8 +54,6 @@ deny = [
 skip = [
 ]
 skip-tree = [
-    # hyper pulls in 2 versions of pin-project :(
-    { name = "pin-project", version = "=0.4.27" },
 ]
 
 [sources]

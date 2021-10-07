@@ -69,6 +69,7 @@ impl Client {
             reviews.extend(previous.items);
             page = self.inner.get_page(&previous.next).await?;
         }
+        tracing::info!(?reviews, "reviews we got from github api");
         Ok(reviews)
     }
 
