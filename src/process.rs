@@ -124,7 +124,7 @@ impl<'a> Analyzer<'a> {
                 && statuses_passed,
         );
 
-        return Ok(actions);
+        Ok(actions)
     }
 
     async fn pr_approved(&self) -> Result<bool> {
@@ -149,7 +149,7 @@ impl<'a> Analyzer<'a> {
                 return Ok(false);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     fn merge_blocked_by_label(&self) -> bool {
