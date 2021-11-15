@@ -8,8 +8,6 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 # Error helpers
 anyhow = "1.0"
-# Simplify action logging
-fern = "0.6"
 # logging and tracing macros
 tracing = "0.1"
 tracing-subscriber = "0.2"
@@ -18,8 +16,6 @@ octocrab = { version = "0.9", default-features = false, features = ["rustls"] }
 http = "*"
 # De/serialization support
 serde = { version = "1.0", features = ["derive"] }
-# JSON support
-serde_json = "1.0"
 # TOML support
 toml = "0.5"
 # Async runtime
