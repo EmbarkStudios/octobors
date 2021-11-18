@@ -11,6 +11,14 @@ ignore = [
     # Vulnerabilities in hyper's server code, which we don't use
     "RUSTSEC-2021-0078",
     "RUSTSEC-2021-0079",
+
+    # Potential Unix segfault with time crate, used by chrono, if setting env
+    # vars in threaded context.
+    # https://github.com/time-rs/time/issues/293
+    "RUSTSEC-2020-0071",
+    # same issue but in chrono itself.
+    # https://github.com/chronotope/chrono/issues/499
+    "RUSTSEC-2020-0159",
 ]
 
 [licenses]
