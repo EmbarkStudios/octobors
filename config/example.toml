@@ -1,37 +1,40 @@
-# The GitHub user or organisation who owns the repos
+# The GitHub user or organisation who owns the repos.
 owner = "my_github_organisation"
 
 # Optional: If set to true then Octobors will analyze the repos and print what
 # it would do, but not apply any changes.
 dry_run = true
 
-# This [[repos]] block is repeated for each repo you wish to process
+# This [[repos]] block may be repeated for each repo you wish to process.
+
 [[repos]]
-# The name of the repo to process
+
+# The name of the repo to process.
 name = "the_repo_name"
 
-# Optional: The label added when a PR does not have a body. 
+# Optional: The label added when a PR does not have a body.
 # If this is set PRs require a description to be merged.
 needs_description_label = "needs-description"
 
-# The list of statuss that are required to be passed for the PR to be
-# automerged
+# The list of status that are required to be passed for the PR to be
+# automerged.
 required_statuses = ["test", "lint"]
 
-# The label applied when all of the PR's required status checks have passed
+# The label applied when all of the PR's required status checks have passed.
 ci_passed_label = "ci-passed"
 
-# Optional: Label applied when a PR has 1 or more reviewers and all of them are accepted
+# Optional: Label applied when a PR has one or more reviewers and all of them
+# have approved.
 reviewed_label = "reviewed"
 
-# Optional: Label that can be manually added to PRs to block automerge
+# Optional: Label that can be manually added to PRs to block automerge.
 block_merge_label = "dont-merge"
 
 # Optional: The period in seconds between when a PR can be automerged, and when
-# the action actually tries to perform the merge
+# the action actually tries to perform the merge.
 automerge_grace_period = 30
 
-# Optiona: The method to use for merging the PR, defaults to `merge` if we fail
-# to parse or it is unset by the user
-# Can be "Merge", "Rebase" or "Squash"
+# Optional: The method to use for merging the PR, defaults to `merge` if we
+# fail to parse or it is unset by the user. Can be "Merge", "Rebase" or
+# "Squash".
 merge_method = "Rebase"
