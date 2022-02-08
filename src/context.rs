@@ -96,14 +96,19 @@ impl Client {
 pub struct Config {
     /// The user or organisation that owns the repos
     pub owner: String,
+
     /// The repos to be run on, and their config
     pub repos: Vec<RepoConfig>,
+
     /// Whether to skip applying the changes or not.
     pub dry_run: bool,
+
     /// The base URL to use GitHub API.  This may be useful if you are using a
     /// proxy for the GitHub API or an enterprise installation.
     pub github_api_base: Option<String>,
+
     /// Extra headers to add to each request made to GitHub's API.
+    #[serde(default)]
     pub extra_headers: Vec<(String, String)>,
 }
 
