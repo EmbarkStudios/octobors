@@ -4,6 +4,7 @@ use octocrab::{
     models,
     params::{pulls::Sort, Direction},
 };
+use std::fmt;
 
 pub struct Client {
     pub inner: octocrab::Octocrab,
@@ -91,7 +92,7 @@ impl Client {
 }
 
 /// Configuration options available for the action
-#[derive(Debug, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Config {
     /// The user or organisation that owns the repos
     pub owner: String,
@@ -104,6 +105,27 @@ pub struct Config {
     pub github_api_base: Option<String>,
     /// Extra headers to add to each request made to GitHub's API.
     pub extra_headers: Vec<(String, String)>,
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Config {
+            owner,
+            repos,
+            dry_run,
+            github_api_base,
+            // not included since it contains secrets that we don't want in logs
+            extra_headers: _,
+        } = self;
+
+        f.debug_struct("Config")
+            .field("owner", owner)
+            .field("repos", repos)
+            .field("dry_run", dry_run)
+            .field("github_api_base", github_api_base)
+            .field("extra_headers", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
