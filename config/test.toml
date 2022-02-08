@@ -1,17 +1,8 @@
-owner = "lpil"
+owner = "bnjbvr"
 dry_run = true
 
 [[repos]]
-name = "puter"
+name = "octotest"
 ci_passed_label = "ci-passed"
-required_statuses = []
-
-[[repos]]
-name = "dotfiles"
-ci_passed_label = "ci-passed"
-required_statuses = []
-
-[[repos]]
-name = "archive"
-ci_passed_label = "ci-passed"
+reviewed_label = "reviewed"
 required_statuses = []
