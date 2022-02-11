@@ -1,5 +1,43 @@
 use tracing as log;
 
+/// Removes HTML comments (in the form of <!-- comments -->) from the given string.
+/// If running into nested comments, aborts and returns the initial string.
+fn remove_html_comments(body: String) -> String {
+    let mut result = String::new();
+    let mut unfinished_comment = false;
+
+    let mut haystack = body.as_str();
+    while let Some(start) = haystack.find("<!--") {
+        result += &haystack[0..start];
+        if let Some(mut end) = haystack[start..].find("-->") {
+            // Let end be relative to haystack[0..].
+            end += start;
+            if haystack[(start + "<!--".len())..end].find("<!--").is_some() {
+                // Embedded comments, abort!
+                return body;
+            }
+            haystack = &haystack[(end + "-->".len())..];
+        } else {
+            // No end to this comment, skip the rest of this string.
+            unfinished_comment = true;
+            break;
+        }
+    }
+
+    if !unfinished_comment {
+        result += haystack;
+    }
+
+    // Try to remove most whitespaces by replacing them by single spaces.
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn format_commit_message(body: String, html_url: String) -> String {
+    // Remove HTML comments from the body.
+    let body = remove_html_comments(body);
+    format!("{}\n\n{}", body, html_url)
+}
+
 /// Queues the pull request for merging
 pub async fn queue(
     client: &crate::context::Client,
@@ -54,7 +92,7 @@ pub async fn queue(
                             .sha(pr.head.sha)
                             .method(config.merge_method)
                             .message(match pr.body {
-                                Some(body) => format!("{}\n\n{}", body, pr.html_url),
+                                Some(body) => format_commit_message(body, pr.html_url.to_string()),
                                 None => pr.html_url.to_string(),
                             });
 
@@ -86,4 +124,45 @@ pub async fn queue(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn remove_comments() {
+        use super::remove_html_comments;
+
+        assert_eq!(
+            remove_html_comments(
+                "Hello <!-- and very surprisingly this is followed by --> world!".to_owned()
+            ),
+            "Hello world!"
+        );
+
+        assert_eq!(
+            remove_html_comments("Hello <!-- no end so it gets all removed".to_owned()),
+            "Hello"
+        );
+
+        assert_eq!(
+            remove_html_comments("This <!-- is <!-- a known limitation --> -->".to_owned()),
+            "This <!-- is <!-- a known limitation --> -->"
+        );
+
+        assert_eq!(
+            remove_html_comments(
+                r#"
+            A <!-- ignore this -->
+            meaningful <!--
+            ignore that too
+            --> merge comment <!-- yo yo yo
+            -->
+            <!--
+            yo yo yo -->.
+            "#
+                .to_owned()
+            ),
+            "A meaningful merge comment .",
+        );
+    }
 }
