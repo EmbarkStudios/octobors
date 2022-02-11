@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     context,
-    review::{Review, Reviews},
+    review::{Approval, Review, Reviews},
 };
 use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -16,6 +16,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub struct Pr {
     pub id: u64,
+    pub author: String,
     pub number: u64,
     pub commit_sha: String,
     pub draft: bool,
@@ -36,6 +37,7 @@ impl Pr {
             .collect();
         Self {
             id: *pr.id,
+            author: pr.user.login,
             number: pr.number,
             commit_sha: pr.head.sha,
             draft: pr.draft,
@@ -128,10 +130,14 @@ impl<'a> Analyzer<'a> {
     }
 
     async fn pr_approved(&self) -> Result<bool> {
-        let review_required = self.config.reviewed_label.is_some();
+        let review_required = if self.config.reviewed_label.is_some() {
+            Approval::Required
+        } else {
+            Approval::Optional
+        };
         let reviews = self.get_pr_reviews().await?;
         log::debug!(reviews = ?reviews, "Got PR reviews");
-        let reviews = Reviews::new().record_reviews(reviews);
+        let reviews = Reviews::new(self.pr.author.clone()).record_reviews(reviews);
         if reviews.approved(review_required) {
             Ok(true)
         } else {
