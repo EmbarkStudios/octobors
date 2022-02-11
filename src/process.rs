@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     context,
-    review::{Approval, Review, Reviews},
+    review::{Approval, CommentEffect, Review, Reviews},
 };
 use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -130,14 +130,21 @@ impl<'a> Analyzer<'a> {
     }
 
     async fn pr_approved(&self) -> Result<bool> {
+        let reviews = self.get_pr_reviews().await?;
+        log::debug!(reviews = ?reviews, "Got PR reviews");
+
         let review_required = if self.config.reviewed_label.is_some() {
             Approval::Required
         } else {
             Approval::Optional
         };
-        let reviews = self.get_pr_reviews().await?;
-        log::debug!(reviews = ?reviews, "Got PR reviews");
-        let reviews = Reviews::new(self.pr.author.clone()).record_reviews(reviews);
+        let comment_effect = if self.config.comment_requests_change {
+            CommentEffect::RequestsChange
+        } else {
+            CommentEffect::Ignore
+        };
+
+        let reviews = Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews);
         if reviews.approved(review_required) {
             Ok(true)
         } else {

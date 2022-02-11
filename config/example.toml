@@ -38,3 +38,10 @@ automerge_grace_period = 30
 # fail to parse or it is unset by the user. Can be "Merge", "Rebase" or
 # "Squash".
 merge_method = "Rebase"
+
+# Optional: With this setting set to true, a "comment" review  counts as if it
+# is requesting changes, even if the user who did it wasn't part of the initial
+# reviewers list. Otherwise, comments have no approval value, and commenting
+# may be considered as an aborted review request (see also
+# https://github.com/EmbarkStudios/octobors/issues/11).
+comment_requests_change = true

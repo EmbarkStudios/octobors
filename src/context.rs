@@ -137,24 +137,35 @@ impl fmt::Debug for Config {
 pub struct RepoConfig {
     /// The name of the repo
     pub name: String,
+
     /// The label added when a PR does not have a body
     pub needs_description_label: Option<String>,
+
     /// The list of statuss that are required to be passed for the PR to be
     /// automerged
     pub required_statuses: Vec<String>,
+
     /// The label applied when all of the PR's required status checks have passed
     pub ci_passed_label: Option<String>,
+
     /// Label applied when a PR has 1 or more reviewers and all of them are accepted
     pub reviewed_label: Option<String>,
+
     /// Label that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
+
     /// The period in seconds between when a PR can be automerged, and when
     /// the action actually tries to perform the merge
     pub automerge_grace_period: Option<u64>,
+
     /// The method to use for merging the PR, defaults to `merge` if we fail
     /// to parse or it is unset by the user
     #[serde(default)]
     pub merge_method: MergeMethod,
+
+    /// Whether a "comment" review counts as requesting changes. False by default.
+    #[serde(default)]
+    pub comment_requests_change: bool,
 }
 
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
