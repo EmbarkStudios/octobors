@@ -18,6 +18,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
     };
     let pr = Pr {
         id: 13482,
+        author: "author".to_owned(),
         number: 1,
         commit_sha: "somesha".to_string(),
         draft: false,

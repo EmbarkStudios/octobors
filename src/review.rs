@@ -24,20 +24,31 @@ pub enum Status {
 
 #[derive(Debug, Clone, Default)]
 pub struct Reviews {
-    latest: HashMap<String, Status>,
+    /// Latest review given by author.
+    /// Doesn't include the PR's author in it.
+    review_by_nick: HashMap<String, Status>,
+
+    /// PR author's nickname.
+    author: String,
+}
+
+pub enum Approval {
+    Required,
+    Optional,
 }
 
 impl Reviews {
-    pub fn new() -> Self {
+    pub fn new(author: impl Into<String>) -> Self {
         Self {
-            latest: HashMap::new(),
+            review_by_nick: HashMap::new(),
+            author: author.into(),
         }
     }
 
     /// Check whether all the reviews are approving.
-    pub fn approved(&self, approval_required: bool) -> bool {
-        let mut approved = !approval_required;
-        for (user, review) in self.latest.iter() {
+    pub fn approved(&self, approval_required: Approval) -> bool {
+        let mut approved = matches!(approval_required, Approval::Optional);
+        for (user, review) in self.review_by_nick.iter() {
             tracing::info!(user = %user, review = ?review, "review");
             match review {
                 Status::Approved => approved = true,
@@ -57,13 +68,18 @@ impl Reviews {
     /// Review a new review. `Approved` and `ChangeRequested` reviews overwrite
     /// existing review state for the reviewer.
     fn record(&mut self, review: Review) {
+        // Self-reviews shouldn't be taken into account.
+        if review.user_name == self.author {
+            return;
+        }
+
         let status = match &review.state {
             ReviewState::Approved => Some(Status::Approved),
             ReviewState::ChangesRequested => Some(Status::ChangeRequested),
             _ => None,
         };
         if let Some(status) = status {
-            let _ = self.latest.insert(review.user_name, status);
+            let _ = self.review_by_nick.insert(review.user_name, status);
         }
     }
 }
@@ -81,83 +97,83 @@ mod tests {
 
     #[test]
     fn empty() {
-        let reviews = Reviews::new();
-        assert!(!reviews.approved(true));
-        assert!(reviews.approved(false));
+        let reviews = Reviews::new("example");
+        assert!(!reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn commented() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::Commented));
-        assert!(!reviews.approved(true));
-        assert!(reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn approve() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::Approved));
-        assert!(reviews.approved(true));
-        assert!(reviews.approved(false));
+        assert!(reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn disapprove() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::ChangesRequested));
-        assert!(!reviews.approved(true));
-        assert!(!reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(!reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn disapprove_then_approve() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::ChangesRequested));
         reviews.record(review("a", ReviewState::Approved));
-        assert!(reviews.approved(true));
-        assert!(reviews.approved(false));
+        assert!(reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn approve_then_disapprove() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::Approved));
         reviews.record(review("a", ReviewState::ChangesRequested));
-        assert!(!reviews.approved(true));
-        assert!(!reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(!reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn disapprove_then_comment() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::ChangesRequested));
         reviews.record(review("a", ReviewState::Commented));
-        assert!(!reviews.approved(true));
-        assert!(!reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(!reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn approve_then_comment() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::Approved));
         reviews.record(review("a", ReviewState::Commented));
-        assert!(reviews.approved(true));
-        assert!(reviews.approved(false));
+        assert!(reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
     fn approve_and_disapprove() {
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("a", ReviewState::Approved));
         reviews.record(review("b", ReviewState::ChangesRequested));
-        assert!(!reviews.approved(true));
-        assert!(!reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(!reviews.approved(Approval::Optional));
 
-        let mut reviews = Reviews::new();
+        let mut reviews = Reviews::new("example");
         reviews.record(review("d", ReviewState::ChangesRequested));
         reviews.record(review("c", ReviewState::Approved));
-        assert!(!reviews.approved(true));
-        assert!(!reviews.approved(false));
+        assert!(!reviews.approved(Approval::Required));
+        assert!(!reviews.approved(Approval::Optional));
     }
 }
