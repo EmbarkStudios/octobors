@@ -15,6 +15,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         block_merge_label: Some("block-merge".to_string()),
         automerge_grace_period: Some(10),
         merge_method: context::MergeMethod::Rebase,
+        comment_requests_change: false,
     };
     let pr = Pr {
         id: 13482,
