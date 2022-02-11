@@ -12,7 +12,7 @@ fn remove_html_comments(body: String) -> String {
         if let Some(mut end) = haystack[start..].find("-->") {
             // Let end be relative to haystack[0..].
             end += start;
-            if haystack[(start + "<!--".len())..end].find("<!--").is_some() {
+            if haystack[(start + "<!--".len())..end].contains("<!--") {
                 // Embedded comments, abort!
                 return body;
             }
