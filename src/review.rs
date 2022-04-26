@@ -87,7 +87,13 @@ impl Reviews {
             (ReviewState::Approved, _) => Some(Status::Approved),
             (ReviewState::ChangesRequested, _) => Some(Status::ChangeRequested),
             (ReviewState::Commented, CommentEffect::RequestsChange) => {
-                Some(Status::ChangeRequested)
+                if let Some(Status::Approved) = self.review_by_nick.get(&review.user_name) {
+                    // As a very special case, don't count comments that are newer than an approval
+                    // review as request for changes.
+                    None
+                } else {
+                    Some(Status::ChangeRequested)
+                }
             }
             _ => None,
         };
@@ -192,11 +198,12 @@ mod tests {
         assert!(reviews.approved(Approval::Required));
         assert!(reviews.approved(Approval::Optional));
 
+        // Comment post approval is ignored.
         let mut reviews = Reviews::new("example", CommentEffect::RequestsChange);
         reviews.record(review("a", ReviewState::Approved));
         reviews.record(review("a", ReviewState::Commented));
-        assert!(!reviews.approved(Approval::Required));
-        assert!(!reviews.approved(Approval::Optional));
+        assert!(reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
