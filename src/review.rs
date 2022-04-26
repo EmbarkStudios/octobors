@@ -87,7 +87,13 @@ impl Reviews {
             (ReviewState::Approved, _) => Some(Status::Approved),
             (ReviewState::ChangesRequested, _) => Some(Status::ChangeRequested),
             (ReviewState::Commented, CommentEffect::RequestsChange) => {
-                Some(Status::ChangeRequested)
+                if let Some(Status::Approved) = self.review_by_nick.get(&review.user_name) {
+                    // As a very special case, don't count comments that are newer than an approval
+                    // review as request for changes.
+                    None
+                } else {
+                    Some(Status::ChangeRequested)
+                }
             }
             _ => None,
         };
