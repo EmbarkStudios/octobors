@@ -198,11 +198,12 @@ mod tests {
         assert!(reviews.approved(Approval::Required));
         assert!(reviews.approved(Approval::Optional));
 
+        // Comment post approval is ignored.
         let mut reviews = Reviews::new("example", CommentEffect::RequestsChange);
         reviews.record(review("a", ReviewState::Approved));
         reviews.record(review("a", ReviewState::Commented));
-        assert!(!reviews.approved(Approval::Required));
-        assert!(!reviews.approved(Approval::Optional));
+        assert!(reviews.approved(Approval::Required));
+        assert!(reviews.approved(Approval::Optional));
     }
 
     #[test]
