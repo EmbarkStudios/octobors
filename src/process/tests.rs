@@ -6,6 +6,7 @@ use super::*;
 
 fn make_context() -> (Pr, context::Client, context::RepoConfig) {
     let client = context::Client::new("token".to_string(), "org".to_string(), None, &[]).unwrap();
+
     let config = context::RepoConfig {
         name: "the-project".to_string(),
         needs_description_label: Some("needs-description".to_string()),
@@ -88,26 +89,81 @@ async fn merge_blocked_by_label() {
 }
 
 #[tokio::test]
-async fn merge_not_blocking_on_reviews() {
+async fn trivial_merge_not_blocked_on_pending_reviews() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
     config.trivial_review_label = Some("trivial :)".to_string());
     pr.labels.insert("trivial :)".to_string());
 
-    let mut analyzer = make_analyzer(&pr, &client, &config);
-    // But also someone requested changes
-    analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::ChangesRequested)]);
+    // But a few reviews are pending
+    pr.requested_reviewers_remaining = 42;
+
+    let analyzer = make_analyzer(&pr, &client, &config);
 
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
             .set_merge(true)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
+
+#[tokio::test]
+async fn trivial_merge_blocked_on_requested_changes () {
+    let (mut pr, client, mut config) = make_context();
+
+    // It's trivial
+    config.trivial_review_label = Some("trivial :)".to_string());
+    pr.labels.insert("trivial :)".to_string());
+
+    // But a few reviews are pending
+    pr.requested_reviewers_remaining = 41;
+
+    let mut analyzer = make_analyzer(&pr, &client, &config);
+
+    // But one reviewer was like meh
+    analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::ChangesRequested)]);
+
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(false)
             .set_label("reviewed", Presence::Absent)
             .set_label("ci-passed", Presence::Present)
             .set_label("needs-description", Presence::Absent)
     );
 }
+
+#[tokio::test]
+async fn trivial_merge_with_approval () {
+    let (mut pr, client, mut config) = make_context();
+
+    // It's trivial
+    config.trivial_review_label = Some("trivial :)".to_string());
+    pr.labels.insert("trivial :)".to_string());
+
+    // But a few reviews are pending
+    pr.requested_reviewers_remaining = 41;
+
+    let mut analyzer = make_analyzer(&pr, &client, &config);
+
+    // But one reviewer was satisfied
+    analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::Approved)]);
+
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(true)
+            .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
+
+
 
 #[tokio::test]
 async fn draft_pr_actions() {
@@ -167,6 +223,7 @@ async fn no_description_none_required_pr_actions() {
 async fn review_not_required_if_label_not_configured() {
     use ReviewState::{Approved, ChangesRequested, Commented};
 
+    #[track_caller]
     async fn assert_approved(approved: bool, cases: Vec<Review>) {
         let (pr, client, mut config) = make_context();
         config.reviewed_label = None;
