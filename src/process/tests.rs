@@ -112,7 +112,7 @@ async fn trivial_merge_not_blocked_on_pending_reviews() {
 }
 
 #[tokio::test]
-async fn trivial_merge_blocked_on_requested_changes () {
+async fn trivial_merge_blocked_on_requested_changes() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
@@ -138,7 +138,7 @@ async fn trivial_merge_blocked_on_requested_changes () {
 }
 
 #[tokio::test]
-async fn trivial_merge_with_approval () {
+async fn trivial_merge_with_approval() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
@@ -162,8 +162,6 @@ async fn trivial_merge_with_approval () {
             .set_label("needs-description", Presence::Absent)
     );
 }
-
-
 
 #[tokio::test]
 async fn draft_pr_actions() {
