@@ -14,9 +14,11 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
         automerge_grace_period: Some(10),
+        trivial_review_label: None,
         merge_method: context::MergeMethod::Rebase,
         comment_requests_change: false,
     };
+
     let pr = Pr {
         id: 13482,
         author: "author".to_owned(),
@@ -29,6 +31,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         has_description: true,
         requested_reviewers_remaining: 0,
     };
+
     (pr, client, config)
 }
 
@@ -79,6 +82,28 @@ async fn merge_blocked_by_label() {
         *Actions::noop()
             .set_merge(false)
             .set_label("reviewed", Presence::Present)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
+
+#[tokio::test]
+async fn merge_not_blocking_on_reviews() {
+    let (mut pr, client, mut config) = make_context();
+
+    // It's trivial
+    config.trivial_review_label = Some("trivial :)".to_string());
+    pr.labels.insert("trivial :)".to_string());
+
+    let mut analyzer = make_analyzer(&pr, &client, &config);
+    // But also someone requested changes
+    analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::ChangesRequested)]);
+
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(true)
+            .set_label("reviewed", Presence::Absent)
             .set_label("ci-passed", Presence::Present)
             .set_label("needs-description", Presence::Absent)
     );
@@ -141,26 +166,25 @@ async fn no_description_none_required_pr_actions() {
 #[tokio::test]
 async fn review_not_required_if_label_not_configured() {
     use ReviewState::{Approved, ChangesRequested, Commented};
-    macro_rules! assert_approved {
-        ($approved:expr, $cases:expr) => {{
-            let (pr, client, mut config) = make_context();
-            config.reviewed_label = None;
-            let mut analyzer = make_analyzer(&pr, &client, &config);
-            analyzer.reviews = RemoteData::Local($cases);
-            assert_eq!(
-                analyzer.required_actions().await.unwrap(),
-                *Actions::noop()
-                    .set_merge($approved)
-                    .set_label("ci-passed", Presence::Present)
-                    .set_label("needs-description", Presence::Absent)
-            );
-        }};
+
+    async fn assert_approved(approved: bool, cases: Vec<Review>) {
+        let (pr, client, mut config) = make_context();
+        config.reviewed_label = None;
+        let mut analyzer = make_analyzer(&pr, &client, &config);
+        analyzer.reviews = RemoteData::Local(cases);
+        assert_eq!(
+            analyzer.required_actions().await.unwrap(),
+            *Actions::noop()
+                .set_merge(approved)
+                .set_label("ci-passed", Presence::Present)
+                .set_label("needs-description", Presence::Absent)
+        );
     }
 
-    assert_approved!(true, vec![]);
-    assert_approved!(true, vec![review("1", Approved)]);
-    assert_approved!(true, vec![review("1", Commented)]);
-    assert_approved!(false, vec![review("1", ChangesRequested)]);
+    assert_approved(true, vec![]).await;
+    assert_approved(true, vec![review("1", Approved)]).await;
+    assert_approved(true, vec![review("1", Commented)]).await;
+    assert_approved(false, vec![review("1", ChangesRequested)]).await;
 }
 
 #[tokio::test]

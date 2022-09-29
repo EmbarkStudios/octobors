@@ -92,7 +92,9 @@ impl<'a> Analyzer<'a> {
             return Ok(actions);
         }
 
-        if pr.requested_reviewers_remaining != 0 {
+        let block_on_reviews = self.block_on_reviews();
+
+        if block_on_reviews && pr.requested_reviewers_remaining != 0 {
             log::info!("Waiting on reviewers, nothing to do");
             return Ok(actions);
         }
@@ -103,12 +105,12 @@ impl<'a> Analyzer<'a> {
         // hit the rate limit.
         let statuses_passed = self.pr_statuses_passed().await?;
         let pr_approved = self.pr_approved().await?;
-        let mut description_ok = true;
 
         if let Some(label) = &self.config.reviewed_label {
             actions.set_label(label, Presence::should_be_present(pr_approved));
         }
 
+        let mut description_ok = true;
         if let Some(label) = &self.config.needs_description_label {
             description_ok = self.pr.has_description;
             actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
@@ -122,7 +124,7 @@ impl<'a> Analyzer<'a> {
             !self.merge_blocked_by_label()
                 && self.outside_grace_period()
                 && description_ok
-                && pr_approved
+                && (pr_approved || !block_on_reviews)
                 && statuses_passed,
         );
 
@@ -166,17 +168,31 @@ impl<'a> Analyzer<'a> {
     }
 
     fn merge_blocked_by_label(&self) -> bool {
-        match &self.config.block_merge_label {
-            None => false,
-            Some(label) => {
+        self.config
+            .block_merge_label
+            .as_ref()
+            .map_or(false, |label| {
                 if self.pr.labels.contains(label) {
                     log::info!("Merge blocked by label");
                     true
                 } else {
                     false
                 }
-            }
-        }
+            })
+    }
+
+    fn block_on_reviews(&self) -> bool {
+        self.config
+            .trivial_review_label
+            .as_ref()
+            .map_or(true, |label| {
+                if self.pr.labels.contains(label) {
+                    log::info!("Not blocked on reviews because of trivial review label");
+                    false
+                } else {
+                    true
+                }
+            })
     }
 
     fn outside_grace_period(&self) -> bool {

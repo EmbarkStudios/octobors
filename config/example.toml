@@ -27,6 +27,10 @@ ci_passed_label = "ci-passed"
 # have approved.
 reviewed_label = "reviewed"
 
+# Optional: Label that can be manually added to PRs to not block on reviews, for trivial changes.
+# If there's also a `block_merge_label` set, it has priority over this label being set.
+trivial_review_label = "trivial"
+
 # Optional: Label that can be manually added to PRs to block automerge.
 block_merge_label = "dont-merge"
 
