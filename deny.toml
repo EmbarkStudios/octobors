@@ -8,25 +8,23 @@ unmaintained = "deny"
 yanked = "deny"
 notice = "warn"
 ignore = [
-    # Vulnerabilities in hyper's server code, which we don't use
-    "RUSTSEC-2021-0078",
-    "RUSTSEC-2021-0079",
-
     # Potential Unix segfault with time crate, used by chrono, if setting env
     # vars in threaded context.
     # https://github.com/time-rs/time/issues/293
     "RUSTSEC-2020-0071",
-    # same issue but in chrono itself.
-    # https://github.com/chronotope/chrono/issues/499
-    "RUSTSEC-2020-0159",
+
+    # ansi_term is unmaintained :shrug:
+    "RUSTSEC-2021-0139",
 ]
 
 [licenses]
 unlicensed = "deny"
 allow = [
-    "Apache-2.0",   # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
-    "ISC",          # https://tldrlegal.com/license/-isc-license
-    "MIT",          # https://tldrlegal.com/license/mit-license
+    "Apache-2.0",       # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
+    "ISC",              # https://tldrlegal.com/license/-isc-license
+    "MIT",              # https://tldrlegal.com/license/mit-license
+    "BSD-3-Clause",     # https://tldrlegal.com/license/bsd-3-clause-license-(revised)
+    "Unicode-DFS-2016", # https://spdx.org/licenses/Unicode-DFS-2016.html
 ]
 copyleft = "deny"
 exceptions = [
