@@ -92,7 +92,9 @@ impl<'a> Analyzer<'a> {
             return Ok(actions);
         }
 
-        if pr.requested_reviewers_remaining != 0 {
+        let block_on_reviews = self.requires_reviews();
+
+        if block_on_reviews && pr.requested_reviewers_remaining != 0 {
             log::info!("Waiting on reviewers, nothing to do");
             return Ok(actions);
         }
@@ -101,18 +103,21 @@ impl<'a> Analyzer<'a> {
         // from the GitHub API in order to do the full check. We do this second
         // so that we use the GitHub API as little as possible, we don't want to
         // hit the rate limit.
+
         let statuses_passed = self.pr_statuses_passed().await?;
-        let pr_approved = self.pr_approved().await?;
-        let mut description_ok = true;
+
+        let pr_approved = self.pr_approved(block_on_reviews).await?;
 
         if let Some(label) = &self.config.reviewed_label {
             actions.set_label(label, Presence::should_be_present(pr_approved));
         }
 
-        if let Some(label) = &self.config.needs_description_label {
-            description_ok = self.pr.has_description;
+        let description_ok = if let Some(label) = &self.config.needs_description_label {
             actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
-        }
+            self.pr.has_description
+        } else {
+            true
+        };
 
         if let Some(label) = &self.config.ci_passed_label {
             actions.set_label(label, Presence::should_be_present(statuses_passed));
@@ -129,11 +134,11 @@ impl<'a> Analyzer<'a> {
         Ok(actions)
     }
 
-    async fn pr_approved(&self) -> Result<bool> {
+    async fn pr_approved(&self, review_required: bool) -> Result<bool> {
         let reviews = self.get_pr_reviews().await?;
         log::debug!(reviews = ?reviews, "Got PR reviews");
 
-        let review_required = if self.config.reviewed_label.is_some() {
+        let review_required = if review_required {
             Approval::Required
         } else {
             Approval::Optional
@@ -145,6 +150,7 @@ impl<'a> Analyzer<'a> {
         };
 
         let reviews = Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews);
+
         if reviews.approved(review_required) {
             Ok(true)
         } else {
@@ -166,17 +172,30 @@ impl<'a> Analyzer<'a> {
     }
 
     fn merge_blocked_by_label(&self) -> bool {
-        match &self.config.block_merge_label {
-            None => false,
-            Some(label) => {
+        self.config
+            .block_merge_label
+            .as_ref()
+            .map_or(false, |label| {
                 if self.pr.labels.contains(label) {
                     log::info!("Merge blocked by label");
                     true
                 } else {
                     false
                 }
+            })
+    }
+
+    fn requires_reviews(&self) -> bool {
+        // Either there's a trivial label, and the PR contains it, so reviews are optional.
+        if let Some(ref trivial_label) = self.config.skip_review_label {
+            if self.pr.labels.contains(trivial_label) {
+                log::info!("Not blocking on reviews because of trivial review label");
+                return false;
             }
         }
+
+        // Or there's a review label, and that makes review mandatory.
+        self.config.reviewed_label.is_some()
     }
 
     fn outside_grace_period(&self) -> bool {

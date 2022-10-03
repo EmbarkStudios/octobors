@@ -1,9 +1,10 @@
 owner = "bnjbvr"
-dry_run = true
+dry_run = false
 
 [[repos]]
 name = "octotest"
 ci_passed_label = "ci-passed"
 reviewed_label = "reviewed"
+skip_review_label = "trivial"
 comment_requests_change = true
 required_statuses = []

@@ -151,6 +151,13 @@ pub struct RepoConfig {
     /// Label applied when a PR has 1 or more reviewers and all of them are accepted
     pub reviewed_label: Option<String>,
 
+    /// Label that can be manually added to PRs to not block on reviews, for trivial changes
+    ///
+    /// If a reviewer has submitted a request-changes review *before* the bot merged the PR, then
+    /// an approval review will be required, and the PR won't automatically get merged until then.
+    /// If there's a `block_merge_label` set, it has priority over this label being set.
+    pub skip_review_label: Option<String>,
+
     /// Label that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
 
