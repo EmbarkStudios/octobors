@@ -187,7 +187,7 @@ impl<'a> Analyzer<'a> {
 
     fn requires_reviews(&self) -> bool {
         // Either there's a trivial label, and the PR contains it, so reviews are optional.
-        if let Some(ref trivial_label) = self.config.trivial_review_label {
+        if let Some(ref trivial_label) = self.config.skip_review_label {
             if self.pr.labels.contains(trivial_label) {
                 log::info!("Not blocking on reviews because of trivial review label");
                 return false;

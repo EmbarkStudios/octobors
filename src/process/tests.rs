@@ -15,7 +15,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
         automerge_grace_period: Some(10),
-        trivial_review_label: None,
+        skip_review_label: None,
         merge_method: context::MergeMethod::Rebase,
         comment_requests_change: false,
     };
@@ -93,7 +93,7 @@ async fn trivial_merge_not_blocked_on_pending_reviews() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
-    config.trivial_review_label = Some("trivial :)".to_string());
+    config.skip_review_label = Some("trivial :)".to_string());
     pr.labels.insert("trivial :)".to_string());
 
     // But a few reviews are pending
@@ -116,7 +116,7 @@ async fn trivial_merge_blocked_on_requested_changes() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
-    config.trivial_review_label = Some("trivial :)".to_string());
+    config.skip_review_label = Some("trivial :)".to_string());
     pr.labels.insert("trivial :)".to_string());
 
     // But a few reviews are pending
@@ -142,7 +142,7 @@ async fn trivial_merge_with_approval() {
     let (mut pr, client, mut config) = make_context();
 
     // It's trivial
-    config.trivial_review_label = Some("trivial :)".to_string());
+    config.skip_review_label = Some("trivial :)".to_string());
     pr.labels.insert("trivial :)".to_string());
 
     // But a few reviews are pending

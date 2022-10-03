@@ -5,6 +5,6 @@ dry_run = false
 name = "octotest"
 ci_passed_label = "ci-passed"
 reviewed_label = "reviewed"
-trivial_review_label = "trivial"
+skip_review_label = "trivial"
 comment_requests_change = true
 required_statuses = []
