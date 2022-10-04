@@ -1,4 +1,4 @@
-FROM rust:1.49.0-slim-buster as build
+FROM rust:1.64.0-slim-buster as build
 
 RUN set -eux; \
     # Install musl-tools so that we can compile with musl libc
