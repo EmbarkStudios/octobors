@@ -106,10 +106,16 @@ impl<'a> Analyzer<'a> {
 
         let statuses_passed = self.pr_statuses_passed().await?;
 
-        let pr_approved = self.pr_approved(block_on_reviews).await?;
+        let reviews = self.get_pr_reviews().await?;
 
-        if let Some(label) = &self.config.reviewed_label {
-            actions.set_label(label, Presence::should_be_present(pr_approved));
+        let changes_requested = reviews
+            .iter()
+            .any(|review| matches!(review.state, models::pulls::ReviewState::ChangesRequested));
+
+        let pr_approved = self.pr_approved(&reviews)?;
+
+        if let Some(reviewed_label) = &self.config.reviewed_label {
+            actions.set_label(reviewed_label, Presence::should_be_present(pr_approved));
         }
 
         let description_ok = if let Some(label) = &self.config.needs_description_label {
@@ -127,31 +133,24 @@ impl<'a> Analyzer<'a> {
             !self.merge_blocked_by_label()
                 && self.outside_grace_period()
                 && description_ok
-                && pr_approved
+                && (!block_on_reviews && !changes_requested || pr_approved)
                 && statuses_passed,
         );
 
         Ok(actions)
     }
 
-    async fn pr_approved(&self, review_required: bool) -> Result<bool> {
-        let reviews = self.get_pr_reviews().await?;
-        log::debug!(reviews = ?reviews, "Got PR reviews");
-
-        let review_required = if review_required {
-            Approval::Required
-        } else {
-            Approval::Optional
-        };
+    fn pr_approved(&self, reviews: &[Review]) -> Result<bool> {
         let comment_effect = if self.config.comment_requests_change {
             CommentEffect::RequestsChange
         } else {
             CommentEffect::Ignore
         };
 
-        let reviews = Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews);
+        let reviews =
+            Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews.to_vec());
 
-        if reviews.approved(review_required) {
+        if reviews.approved(Approval::Required) {
             Ok(true)
         } else {
             log::info!("Not yet approved by review");
@@ -187,9 +186,9 @@ impl<'a> Analyzer<'a> {
 
     fn requires_reviews(&self) -> bool {
         // Either there's a trivial label, and the PR contains it, so reviews are optional.
-        if let Some(ref trivial_label) = self.config.skip_review_label {
-            if self.pr.labels.contains(trivial_label) {
-                log::info!("Not blocking on reviews because of trivial review label");
+        if let Some(ref skip_review_label) = self.config.skip_review_label {
+            if self.pr.labels.contains(skip_review_label) {
+                log::info!("Not blocking on reviews because of skip review label");
                 return false;
             }
         }
@@ -213,7 +212,7 @@ impl<'a> Analyzer<'a> {
     }
 
     async fn get_pr_reviews(&self) -> Result<Vec<Review>> {
-        match &self.reviews {
+        let reviews = match &self.reviews {
             RemoteData::Local(reviews) => Ok(reviews.clone()),
             RemoteData::Remote => Ok(self
                 .client
@@ -222,7 +221,9 @@ impl<'a> Analyzer<'a> {
                 .iter()
                 .flat_map(Review::from_octocrab_review)
                 .collect()),
-        }
+        };
+        log::debug!(?reviews, "Got PR reviews");
+        reviews
     }
 
     async fn get_pr_statuses(&self) -> Result<HashMap<String, StatusState>> {

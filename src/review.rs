@@ -35,8 +35,10 @@ pub struct Reviews {
     author: String,
 }
 
+#[derive(Debug)]
 pub enum Approval {
     Required,
+    #[allow(dead_code)]
     Optional,
 }
 
@@ -59,7 +61,7 @@ impl Reviews {
     pub fn approved(&self, approval_required: Approval) -> bool {
         let mut approved = matches!(approval_required, Approval::Optional);
         for (user, review) in self.review_by_nick.iter() {
-            tracing::info!(user = %user, review = ?review, "review");
+            tracing::info!(%user, ?review, "review");
             match review {
                 Status::Approved => approved = true,
                 Status::ChangeRequested => return false,

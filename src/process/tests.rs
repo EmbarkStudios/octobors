@@ -465,3 +465,27 @@ async fn requested_reviews() {
     assert_merge!(2, false);
     assert_merge!(3, false);
 }
+
+#[tokio::test]
+async fn doesnt_add_reviewed_label_if_skipping_review() {
+    let (mut pr, client, mut config) = make_context();
+
+    config.skip_review_label = Some("trivial :)".to_string());
+    config.reviewed_label = Some("reviewed".to_string());
+
+    pr.labels.insert("trivial :)".to_string());
+
+    let mut analyzer = make_analyzer(&pr, &client, &config);
+
+    // No reviews
+    analyzer.reviews = RemoteData::Local(vec![]);
+
+    assert_eq!(
+        analyzer.required_actions().await.unwrap(),
+        *Actions::noop()
+            .set_merge(true)
+            .set_label("ci-passed", Presence::Present)
+            .set_label("reviewed", Presence::Absent)
+            .set_label("needs-description", Presence::Absent)
+    );
+}
