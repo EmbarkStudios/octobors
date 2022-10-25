@@ -128,16 +128,14 @@ impl<'a> Analyzer<'a> {
         }
 
         // All requirements for merge-able PR.
-        let mut should_merge = !self.merge_blocked_by_label()
+        let should_merge = !self.merge_blocked_by_label()
             && self.outside_grace_period()
             && description_ok
             && pr_approved
             && statuses_passed;
-
-        let has_maintenance_label = self.has_maintenance_label();
-
-        if should_merge && has_maintenance_label {
-            should_merge = self.within_maintenance_time();
+        
+        if should_merge  {
+            self.try_remove_maintenance_label(&mut actions);            
         }
 
         actions.set_merge(should_merge);
@@ -196,6 +194,19 @@ impl<'a> Analyzer<'a> {
             })
     }
 
+    fn try_remove_maintenance_label(&self, actions: &mut Actions) {
+        let has_maintenance_label = self.has_maintenance_label();
+
+        if has_maintenance_label && self.within_maintenance_time() {
+            self.config
+            .maintenance_label
+            .as_ref()
+            .map(|label| {
+                actions.remove_labels.remove(label);
+            });
+        }
+    }
+
     fn has_maintenance_label(&self) -> bool {
         self.config
             .maintenance_label
@@ -211,13 +222,19 @@ impl<'a> Analyzer<'a> {
             .as_ref()
             .and_then(|maintenance_time| {
                 let schedule = Schedule::from_str(maintenance_time).unwrap();
-                schedule.upcoming(Utc).next()
+                schedule.upcoming(Utc).next()                
             })
             .map_or(false,|maintenance_time| {
+                // Second or minute scheduled crons are not supported.
+                // Take into account some maintenance window of 5 minutes to remove the maintenance label.
                 let current_time = Utc::now();
+                
+                let time_dif = current_time - maintenance_time;
+                let minimum_time_diff = Duration::minutes(5);
 
-                if maintenance_time > current_time {
-                    log::info!("Maintenance time");
+                // Means we merge PR's within 5 seconds of the maintenance time.
+                if maintenance_time > current_time && time_dif < minimum_time_diff{
+                    log::info!("Maintenance time, merging PR's with maintenance label");
                     true
                 } else {
                     false
