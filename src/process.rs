@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
-    time::Instant,
 };
 
 use crate::{
@@ -9,10 +8,10 @@ use crate::{
     review::{Approval, CommentEffect, Review, Reviews},
 };
 use anyhow::{Context as _, Error, Result};
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, Utc};
 use cron::Schedule;
 use models::{pulls::PullRequest, IssueState, StatusState};
-use octocrab::models::{self, Installation};
+use octocrab::models::{self};
 use tracing as log;
 
 #[cfg(test)]
@@ -128,7 +127,7 @@ impl<'a> Analyzer<'a> {
             actions.set_label(label, Presence::should_be_present(statuses_passed));
         }
 
-        // All requirements for valid PR.
+        // All requirements for merge-able PR.
         let mut should_merge = !self.merge_blocked_by_label()
             && self.outside_grace_period()
             && description_ok
@@ -138,7 +137,6 @@ impl<'a> Analyzer<'a> {
         let has_maintenance_label = self.has_maintenance_label();
 
         if should_merge && has_maintenance_label {
-            // I maintenance label is merged
             should_merge = self.within_maintenance_time();
         }
 
@@ -203,24 +201,19 @@ impl<'a> Analyzer<'a> {
             .maintenance_label
             .as_ref()
             .map_or(false, |label| {
-                if self.pr.labels.contains(label) {
-                    true
-                } else {
-                    false
-                }
+                self.pr.labels.contains(label)
             })
     }
 
     fn within_maintenance_time(&self) -> bool {
-        let current_time = Instant::now();
-
         self.config
             .maintenance_time
+            .as_ref()
             .and_then(|maintenance_time| {
-                let schedule = Schedule::from_str(&maintenance_time).unwrap();
+                let schedule = Schedule::from_str(maintenance_time).unwrap();
                 schedule.upcoming(Utc).next()
             })
-            .map(|maintenance_time| {
+            .map_or(false,|maintenance_time| {
                 let current_time = Utc::now();
 
                 if maintenance_time > current_time {
@@ -230,7 +223,6 @@ impl<'a> Analyzer<'a> {
                     false
                 }
             })
-            .unwrap_or(false)
     }
 
     fn requires_reviews(&self) -> bool {
