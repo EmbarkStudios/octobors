@@ -1,13 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    time::Instant,
+};
 
 use crate::{
     context,
     review::{Approval, CommentEffect, Review, Reviews},
 };
 use anyhow::{Context as _, Error, Result};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
+use cron::Schedule;
 use models::{pulls::PullRequest, IssueState, StatusState};
-use octocrab::models;
+use octocrab::models::{self, Installation};
 use tracing as log;
 
 #[cfg(test)]
@@ -123,13 +128,21 @@ impl<'a> Analyzer<'a> {
             actions.set_label(label, Presence::should_be_present(statuses_passed));
         }
 
-        actions.set_merge(
-            !self.merge_blocked_by_label()
-                && self.outside_grace_period()
-                && description_ok
-                && pr_approved
-                && statuses_passed,
-        );
+        // All requirements for valid PR.
+        let mut should_merge = !self.merge_blocked_by_label()
+            && self.outside_grace_period()
+            && description_ok
+            && pr_approved
+            && statuses_passed;
+
+        let has_maintenance_label = self.has_maintenance_label();
+
+        if should_merge && has_maintenance_label {
+            // I maintenance label is merged
+            should_merge = self.within_maintenance_time();
+        }
+
+        actions.set_merge(should_merge);
 
         Ok(actions)
     }
@@ -183,6 +196,41 @@ impl<'a> Analyzer<'a> {
                     false
                 }
             })
+    }
+
+    fn has_maintenance_label(&self) -> bool {
+        self.config
+            .maintenance_label
+            .as_ref()
+            .map_or(false, |label| {
+                if self.pr.labels.contains(label) {
+                    true
+                } else {
+                    false
+                }
+            })
+    }
+
+    fn within_maintenance_time(&self) -> bool {
+        let current_time = Instant::now();
+
+        self.config
+            .maintenance_time
+            .and_then(|maintenance_time| {
+                let schedule = Schedule::from_str(&maintenance_time).unwrap();
+                schedule.upcoming(Utc).next()
+            })
+            .map(|maintenance_time| {
+                let current_time = Utc::now();
+
+                if maintenance_time > current_time {
+                    log::info!("Maintenance time");
+                    true
+                } else {
+                    false
+                }
+            })
+            .unwrap_or(false)
     }
 
     fn requires_reviews(&self) -> bool {
