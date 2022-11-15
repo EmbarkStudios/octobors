@@ -28,8 +28,29 @@ fn remove_html_comments(body: String) -> String {
         result += haystack;
     }
 
-    // Try to remove most whitespaces by replacing them by single spaces.
-    result.split_whitespace().collect::<Vec<_>>().join(" ")
+    // Whitespacing shenanigans:
+    // - within a single line, make sure there aren't multiple consecutive whitespaces
+    let lines = result
+        .trim()
+        .split('\n')
+        .map(|line| line.trim().split_whitespace().collect::<Vec<_>>().join(" "))
+        .collect::<Vec<_>>();
+
+    // - overall, make sure that paragraph are split across at most two blank lines.
+    let mut result = Vec::new();
+    let mut prev_was_empty = false;
+    for line in lines {
+        if line.trim().is_empty() {
+            if prev_was_empty {
+                continue;
+            }
+            prev_was_empty = true;
+        } else {
+            prev_was_empty = false;
+        }
+        result.push(line);
+    }
+    result.join("\n")
 }
 
 fn format_commit_message(body: String, html_url: String) -> String {
@@ -151,18 +172,48 @@ mod tests {
 
         assert_eq!(
             remove_html_comments(
-                r#"
-            A <!-- ignore this -->
-            meaningful <!--
-            ignore that too
-            --> merge comment <!-- yo yo yo
-            -->
-            <!--
-            yo yo yo -->.
-            "#
+                r#" A <!-- ignore this --> meaningful <!-- ignore that too --> merge comment <!-- yo yo yo --> <!-- yo yo yo -->. "#
                 .to_owned()
             ),
             "A meaningful merge comment .",
+        );
+
+        // Preserve paragraph structure, even in the presence of paragraphs.
+        assert_eq!(
+            remove_html_comments(
+                r#"<!-- start with a comment that's going to be removed --> A multi-line message.
+
+<!-- with a comment in the middle -->
+
+Overall paragraph structure should be preserved.<!--
+
+and end with a comment
+
+-->"#
+                    .to_owned()
+            ),
+            r#"A multi-line message.
+
+Overall paragraph structure should be preserved."#
+        );
+
+        // Maintain paragraph structure, but remove unneeded blank lines.
+        assert_eq!(
+            remove_html_comments(
+                r#"A multi-line message.
+
+
+
+But without comments.
+
+Paragraph structure should be preserved."#
+                    .to_owned()
+            ),
+            r#"A multi-line message.
+
+But without comments.
+
+Paragraph structure should be preserved."#
         );
     }
 }
