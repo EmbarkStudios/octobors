@@ -33,7 +33,7 @@ fn remove_html_comments(body: String) -> String {
     let lines = result
         .trim()
         .split('\n')
-        .map(|line| line.trim().split_whitespace().collect::<Vec<_>>().join(" "))
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect::<Vec<_>>();
 
     // - overall, make sure that paragraph are split across at most two blank lines.
