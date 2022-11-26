@@ -158,8 +158,26 @@ pub struct RepoConfig {
     /// If there's a `block_merge_label` set, it has priority over this label being set.
     pub skip_review_label: Option<String>,
 
-    /// Label that can be manually added to PRs to block automerge
+    /// Labels that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
+
+    /// Label that can be added to PR's to prevent auto merging until the `maintenance_time` is med.
+    pub maintenance_label: Option<String>,
+
+    /// The maintenance interval when `maintenance_label` is removed allowing blocked PR's being merged.
+    /// If not set, there is no maintenance time, and it is expected to manually remove the maintenance label.
+    ///
+    /// Expected cron schedule format:
+    ///
+    /// ```
+    /// // sec  min   hour   day of month   month   day of week   year
+    ///     0   0    9,12,15     1,15       May-Aug  Mon,Wed,Fri  2018/2
+    /// ```
+    ///
+    /// **Seconds and minutes are ignored!**
+    ///
+    /// This input is parsed by the [cron](https://github.com/zslayton/cron) crate.
+    pub maintenance_time: Option<String>,
 
     /// The period in seconds between when a PR can be automerged, and when
     /// the action actually tries to perform the merge
