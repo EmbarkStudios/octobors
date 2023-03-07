@@ -71,14 +71,21 @@
 use std::path::PathBuf;
 
 use anyhow::{Context as _, Result};
+use log::metadata::LevelFilter;
 use tracing as log;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
         .without_time()
-        .with_max_level(tracing::Level::INFO)
         .init();
+
     let app = octobors::Octobors::new(&get_config_path()?)?;
     log::info!("configuration: {:?}", app.config);
     app.process_all().await
