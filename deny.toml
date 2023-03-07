@@ -12,9 +12,6 @@ ignore = [
     # vars in threaded context.
     # https://github.com/time-rs/time/issues/293
     "RUSTSEC-2020-0071",
-
-    # ansi_term is unmaintained :shrug:
-    "RUSTSEC-2021-0139",
 ]
 
 [licenses]
@@ -58,6 +55,7 @@ multiple-versions = "deny"
 deny = [
 ]
 skip = [
+    { name = "base64", version = "=0.13" },
 ]
 skip-tree = [
 ]
