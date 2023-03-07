@@ -221,6 +221,7 @@ async fn no_description_none_required_pr_actions() {
 async fn review_not_required_if_label_not_configured() {
     use ReviewState::{Approved, ChangesRequested, Commented};
 
+    #[track_caller]
     async fn assert_approved(approved: bool, cases: Vec<Review>) {
         let (pr, client, mut config) = make_context();
         config.reviewed_label = None;
