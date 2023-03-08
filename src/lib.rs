@@ -68,6 +68,9 @@
 )]
 // END - Embark standard lints v0.4
 
+// See https://github.com/rust-lang/rust/issues/87417
+#![allow(ungated_async_fn_track_caller)]
+
 pub mod context;
 mod merge;
 pub mod process;
