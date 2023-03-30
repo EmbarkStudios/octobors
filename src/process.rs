@@ -13,6 +13,28 @@ use tracing as log;
 #[cfg(test)]
 mod tests;
 
+#[derive(PartialEq, Eq, Hash)]
+enum BlockReason {
+    /// The PR is in the draft status.
+    DraftPr,
+    /// The PR is closed.
+    ClosedPr,
+    /// The PR has been inactive for over 60 minutes.
+    InactivePr,
+    /// The PR has reviewers set, and they haven't given a review yet.
+    MissingReviews,
+    /// The PR is waiting for a PR approval, and a label requires approvals.
+    MissingReviewApproval { from_users: Vec<String> },
+    /// The CI is not done running yet, or it's failing.
+    CiNotPassing,
+    /// The PR lacks a description, and a label requires a description.
+    MissingDescription,
+    /// The merge is blocked by a label.
+    BlockedByLabel,
+    /// The PR is inside a grace period.
+    InsideGracePeriod,
+}
+
 #[derive(Debug, Clone)]
 pub struct Pr {
     pub id: u64,
@@ -50,6 +72,11 @@ impl Pr {
     }
 }
 
+enum PrApprovalStatus {
+    Approved,
+    MissingReview { from_users: Vec<String> },
+}
+
 pub struct Analyzer<'a> {
     pr: &'a Pr,
     client: &'a context::Client,
@@ -72,69 +99,219 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    async fn analyze_comments(
+        &self,
+        reasons: &HashSet<BlockReason>,
+        actions: &mut Actions,
+    ) -> Result<()> {
+        const SIGIL: &str = "### Merge status";
+
+        let user_id = self.client.get_bot_nick().await?;
+        let bot_mention = format!("@{user_id}");
+
+        let pr_comments = self
+            .client
+            .get_pull_request_comments(self.config.name.as_str(), self.pr.number)
+            .await?;
+        let mut looking_for_response = false;
+
+        for (author, body) in pr_comments.into_iter().filter_map(|comment| {
+            if let Some(body) = comment.body {
+                Some((comment.user.login, body))
+            } else {
+                None
+            }
+        }) {
+            if looking_for_response && author == user_id && body.starts_with(SIGIL) {
+                log::trace!("Found response to the user asking why the PR is blocked");
+                looking_for_response = false;
+            }
+            if author != user_id && body.contains(&bot_mention) {
+                log::trace!("Found a comment asking mentioning the bot and asking why it's stuck");
+                looking_for_response = true;
+            }
+        }
+
+        if looking_for_response {
+            let mut body = String::new();
+
+            for reason in reasons {
+                match reason {
+                    BlockReason::DraftPr => {
+                        body += "- This PR is a draft.\n";
+                    }
+                    BlockReason::ClosedPr => {
+                        body += "- This PR is closed.\n";
+                    }
+                    BlockReason::InactivePr => {
+                        // Probably the bot was inactive for too long, don't report here.
+                    }
+                    BlockReason::MissingReviews => {
+                        body += "- Still waiting for requested reviewers to review this.\n";
+                    }
+                    BlockReason::MissingReviewApproval { from_users } => {
+                        body += "- There are some missing review approvals";
+                        if self.config.comment_requests_change {
+                            body += " (and comments count as request-changes)";
+                        }
+                        if !from_users.is_empty() {
+                            body += ". Missing approvals from: ";
+                            body += &from_users
+                                .iter()
+                                .map(|nick| format!("@{nick}"))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                        }
+                        body += ".\n";
+                    }
+                    BlockReason::CiNotPassing => {
+                        body += "- Github checks haven't passed yet.\n";
+                    }
+                    BlockReason::MissingDescription => {
+                        body += "- This PR lacks a description.\n";
+                    }
+                    BlockReason::BlockedByLabel => {
+                        body += &format!(
+                            "- This PR is blocked by the '{}' label.\n",
+                            self.config.block_merge_label.as_ref().unwrap()
+                        );
+                    }
+                    BlockReason::InsideGracePeriod => {
+                        body += "- In grace period; I'll retry in a bit.\n";
+                    }
+                }
+            }
+
+            if body.is_empty() {
+                body += "Sorry, I was taking a nice little nap; will get back to work now!\n";
+            }
+
+            actions.post_comment(format!("{SIGIL}\n{body}"));
+        }
+
+        Ok(())
+    }
+
+    fn analyze_basic_checks(&self) -> HashSet<BlockReason> {
+        let mut reasons = HashSet::new();
+        let pr = &self.pr;
+        if pr.draft {
+            reasons.insert(BlockReason::DraftPr);
+        }
+        if pr.state == IssueState::Closed {
+            reasons.insert(BlockReason::ClosedPr);
+        }
+        if pr.updated_at < Utc::now() - Duration::minutes(60) {
+            reasons.insert(BlockReason::InactivePr);
+        }
+        let block_on_reviews = self.requires_reviews();
+        if block_on_reviews && pr.requested_reviewers_remaining != 0 {
+            reasons.insert(BlockReason::MissingReviews);
+        }
+        if self.merge_blocked_by_label() {
+            reasons.insert(BlockReason::BlockedByLabel);
+        }
+        if self.config.needs_description_label.is_some() && !self.pr.has_description {
+            reasons.insert(BlockReason::MissingDescription);
+        }
+        if !self.outside_grace_period() {
+            reasons.insert(BlockReason::InsideGracePeriod);
+        }
+        reasons
+    }
+
+    async fn analyze_extended_checks(
+        &self,
+        reasons: &mut HashSet<BlockReason>,
+    ) -> anyhow::Result<()> {
+        let statuses_passed = self.pr_statuses_passed().await?;
+        if !statuses_passed {
+            reasons.insert(BlockReason::CiNotPassing);
+        }
+        let pr_approved = self.pr_approved(self.requires_reviews()).await?;
+        if let PrApprovalStatus::MissingReview { from_users } = pr_approved {
+            reasons.insert(BlockReason::MissingReviewApproval { from_users });
+        }
+        Ok(())
+    }
+
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
-        let pr = &self.pr;
         let mut actions = Actions::noop();
 
-        if pr.draft {
-            log::info!("Draft, nothing to do");
-            return Ok(actions);
+        let mut block_reasons = self.analyze_basic_checks();
+        if self.config.react_to_comments || block_reasons.is_empty() {
+            // Now that the basic checks have been passed we can gather information
+            // from the GitHub API in order to do the full check. We do this second
+            // so that we use the GitHub API as little as possible, we don't want to
+            // hit the rate limit.
+            self.analyze_extended_checks(&mut block_reasons).await?;
         }
 
-        if pr.state == IssueState::Closed {
-            log::info!("Closed, nothing to do");
-            return Ok(actions);
+        if self.config.react_to_comments {
+            self.analyze_comments(&block_reasons, &mut actions).await?;
         }
 
-        if pr.updated_at < Utc::now() - Duration::minutes(60) {
-            log::info!("Inactive for over 60 minutes, nothing to do");
-            return Ok(actions);
+        let mut missing_review = false;
+        let mut statuses_passed = true;
+
+        for reason in &block_reasons {
+            match reason {
+                BlockReason::DraftPr => {
+                    log::info!("Draft, nothing to do");
+                    return Ok(actions);
+                }
+                BlockReason::ClosedPr => {
+                    log::info!("Closed, nothing to do");
+                    return Ok(actions);
+                }
+                BlockReason::InactivePr => {
+                    log::info!("Inactive for over 60 minutes, nothing to do");
+                    return Ok(actions);
+                }
+                BlockReason::MissingReviews => {
+                    log::info!("Waiting on reviewers, nothing to do");
+                    missing_review = true;
+                }
+                BlockReason::MissingReviewApproval { .. } => {
+                    log::info!("Still waiting for a review approval");
+                    missing_review = true;
+                }
+                BlockReason::CiNotPassing => {
+                    log::info!("CI not passing yet");
+                    statuses_passed = false;
+                }
+                BlockReason::MissingDescription => {
+                    log::info!("Missing description");
+                }
+                BlockReason::BlockedByLabel => {
+                    log::info!("Blocked by a block-merge label.");
+                }
+                BlockReason::InsideGracePeriod => {
+                    log::info!("Still inside the grace period");
+                }
+            }
         }
 
-        let block_on_reviews = self.requires_reviews();
-
-        if block_on_reviews && pr.requested_reviewers_remaining != 0 {
-            log::info!("Waiting on reviewers, nothing to do");
-            return Ok(actions);
-        }
-
-        // Now that the basic checks have been passed we can gather information
-        // from the GitHub API in order to do the full check. We do this second
-        // so that we use the GitHub API as little as possible, we don't want to
-        // hit the rate limit.
-
-        let statuses_passed = self.pr_statuses_passed().await?;
-
-        let pr_approved = self.pr_approved(block_on_reviews).await?;
-
+        // Apply labels.
         if let Some(label) = &self.config.reviewed_label {
-            actions.set_label(label, Presence::should_be_present(pr_approved));
+            let reviewed = !missing_review;
+            actions.set_label(label, Presence::should_be_present(reviewed));
         }
-
-        let description_ok = if let Some(label) = &self.config.needs_description_label {
-            actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
-            self.pr.has_description
-        } else {
-            true
-        };
-
         if let Some(label) = &self.config.ci_passed_label {
             actions.set_label(label, Presence::should_be_present(statuses_passed));
         }
+        if let Some(label) = &self.config.needs_description_label {
+            actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
+        }
 
-        actions.set_merge(
-            !self.merge_blocked_by_label()
-                && self.outside_grace_period()
-                && description_ok
-                && pr_approved
-                && statuses_passed,
-        );
+        // Conclude.
+        actions.set_merge(block_reasons.is_empty());
 
         Ok(actions)
     }
 
-    async fn pr_approved(&self, review_required: bool) -> Result<bool> {
+    async fn pr_approved(&self, review_required: bool) -> Result<PrApprovalStatus> {
         let reviews = self.get_pr_reviews().await?;
         log::debug!(reviews = ?reviews, "Got PR reviews");
 
@@ -152,10 +329,14 @@ impl<'a> Analyzer<'a> {
         let reviews = Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews);
 
         if reviews.approved(review_required) {
-            Ok(true)
+            Ok(PrApprovalStatus::Approved)
         } else {
+            let from_users = reviews.missing_approvals_from_users();
             log::info!("Not yet approved by review");
-            Ok(false)
+            if !from_users.is_empty() {
+                log::info!("\tWaiting for reviews from: {}", from_users.join(", "));
+            }
+            Ok(PrApprovalStatus::MissingReview { from_users })
         }
     }
 
@@ -265,6 +446,7 @@ pub struct Actions {
     pub merge: bool,
     pub add_labels: HashSet<String>,
     pub remove_labels: HashSet<String>,
+    pub post_comment: Vec<String>,
 }
 
 impl Actions {
@@ -282,6 +464,11 @@ impl Actions {
 
     pub fn set_merge(&mut self, should_merge: bool) -> &mut Self {
         self.merge = should_merge;
+        self
+    }
+
+    pub fn post_comment(&mut self, comment: String) -> &mut Self {
+        self.post_comment.push(comment);
         self
     }
 }
@@ -361,5 +548,19 @@ pub async fn remove_labels(
         }
     }
 
+    Ok(())
+}
+
+pub async fn post_comment(
+    client: &context::Client,
+    repo: &str,
+    pr_number: u64,
+    comment: String,
+) -> anyhow::Result<()> {
+    client
+        .inner
+        .issues(client.owner.clone(), repo)
+        .create_comment(pr_number, comment)
+        .await?;
     Ok(())
 }

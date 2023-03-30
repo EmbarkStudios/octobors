@@ -4,11 +4,12 @@ use octocrab::{
     models,
     params::{pulls::Sort, Direction},
 };
-use std::fmt;
+use std::{cell::RefCell, fmt};
 
 pub struct Client {
     pub inner: octocrab::Octocrab,
     pub owner: String,
+    pub bot_nick: RefCell<Option<String>>,
 }
 
 impl Client {
@@ -30,7 +31,11 @@ impl Client {
             .personal_token(token)
             .build()
             .context("failed to create client")?;
-        Ok(Self { inner, owner })
+        Ok(Self {
+            inner,
+            owner,
+            bot_nick: RefCell::new(None),
+        })
     }
 
     /// Get the currently open pull requests for the repo.
@@ -50,6 +55,29 @@ impl Client {
             .await
             .context("unable to retrieve pull requests")?
             .items)
+    }
+
+    /// Retrieves all the comments (that are not associated to a review) for a given pull request.
+    pub async fn get_pull_request_comments(
+        &self,
+        repo: &str,
+        pr_number: u64,
+    ) -> Result<Vec<models::issues::Comment>> {
+        let mut comments = Vec::new();
+        let page = self
+            .inner
+            .issues(&self.owner, repo)
+            .list_comments(pr_number)
+            .send()
+            .await
+            .context("Could not get comments for PR")?;
+        let mut page = Some(page);
+        while let Some(previous) = page {
+            comments.extend(previous.items);
+            page = self.inner.get_page(&previous.next).await?;
+        }
+        tracing::info!(?comments, "comments we got from github api");
+        Ok(comments)
     }
 
     /// Get the reviews for a PR
@@ -88,6 +116,24 @@ impl Client {
             .await
             .context("Could not get statuses for commit")?
             .statuses)
+    }
+
+    pub(crate) async fn get_bot_nick(&self) -> Result<String> {
+        {
+            let bot_nick = self.bot_nick.borrow();
+            if let Some(cached) = &*bot_nick {
+                return Ok(cached.clone());
+            }
+        }
+        let nick = self
+            .inner
+            .current()
+            .user()
+            .await
+            .context("Getting the bot user id")?
+            .login;
+        *self.bot_nick.borrow_mut() = Some(nick.clone());
+        Ok(nick)
     }
 }
 
@@ -173,6 +219,11 @@ pub struct RepoConfig {
     /// Whether a "comment" review counts as requesting changes. False by default.
     #[serde(default)]
     pub comment_requests_change: bool,
+
+    /// Whether the bot should watch for comments asking why it's stuck, and answer them. False by
+    /// default.
+    #[serde(default)]
+    pub react_to_comments: bool,
 }
 
 #[derive(Debug, Clone, Copy, serde::Deserialize)]

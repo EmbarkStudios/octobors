@@ -68,6 +68,15 @@ impl Reviews {
         approved
     }
 
+    /// Returns a list of the github names of missing approvers.
+    pub fn missing_approvals_from_users(&self) -> Vec<String> {
+        self.review_by_nick
+            .iter()
+            .filter_map(|(nick, status)| matches!(status, Status::ChangeRequested).then(|| nick))
+            .cloned()
+            .collect()
+    }
+
     pub fn record_reviews(mut self, reviews: Vec<Review>) -> Self {
         for review in reviews {
             self.record(review);

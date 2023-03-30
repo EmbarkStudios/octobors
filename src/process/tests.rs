@@ -18,6 +18,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         skip_review_label: None,
         merge_method: context::MergeMethod::Rebase,
         comment_requests_change: false,
+        react_to_comments: false,
     };
 
     let pr = Pr {

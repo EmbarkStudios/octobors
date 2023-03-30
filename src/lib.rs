@@ -172,6 +172,7 @@ impl<'a> RepoProcessor<'a> {
         let mut labels = pr.labels.iter().cloned().collect();
         let client = &self.client;
         let num = pr.number;
+
         process::remove_labels(
             client,
             &self.repo_config.name,
@@ -180,6 +181,7 @@ impl<'a> RepoProcessor<'a> {
             actions.remove_labels.into_iter(),
         )
         .await?;
+
         process::add_labels(
             client,
             &self.repo_config.name,
@@ -188,6 +190,11 @@ impl<'a> RepoProcessor<'a> {
             actions.add_labels.into_iter(),
         )
         .await?;
+
+        for comment in actions.post_comment {
+            log::debug!("Posting a comment: {comment}");
+            process::post_comment(client, &self.repo_config.name, num, comment).await?;
+        }
 
         if actions.merge {
             log::info!("Attempting to merge");
