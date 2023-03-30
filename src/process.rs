@@ -157,7 +157,7 @@ impl<'a> Analyzer<'a> {
                             body += " (and comments count as request-changes)";
                         }
                         if !from_users.is_empty() {
-                            body += ". Missing reviews from: ";
+                            body += ". Missing approvals from: ";
                             body += &from_users.join(", ");
                         }
                         body += ".\n";
