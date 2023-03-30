@@ -68,8 +68,6 @@ impl Client {
             .inner
             .issues(&self.owner, repo)
             .list_comments(pr_number)
-            //.sort(octocrab::params::pulls::comments::Sort::Created)
-            //.direction(Direction::Ascending)
             .send()
             .await
             .context("Could not get comments for PR")?;

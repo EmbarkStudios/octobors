@@ -156,7 +156,11 @@ impl<'a> Analyzer<'a> {
                         }
                         if !from_users.is_empty() {
                             body += ". Missing approvals from: ";
-                            body += &from_users.join(", ");
+                            body += &from_users
+                                .iter()
+                                .map(|nick| format!("@{nick}"))
+                                .collect::<Vec<_>>()
+                                .join(", ");
                         }
                         body += ".\n";
                     }
