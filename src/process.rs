@@ -140,10 +140,10 @@ impl<'a> Analyzer<'a> {
             for reason in reasons {
                 match reason {
                     BlockReason::DraftPr => {
-                        body += "- This pr is a draft.\n";
+                        body += "- This PR is a draft.\n";
                     }
                     BlockReason::ClosedPr => {
-                        body += "- This pr is closed.\n";
+                        body += "- This PR is closed.\n";
                     }
                     BlockReason::InactivePr => {
                         // Probably the bot was inactive for too long, don't report here.
