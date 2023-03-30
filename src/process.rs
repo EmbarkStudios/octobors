@@ -122,11 +122,9 @@ impl<'a> Analyzer<'a> {
                 None
             }
         }) {
-            if looking_for_response {
-                if author == user_id && body.starts_with(SIGIL) {
-                    log::trace!("Found response to the user asking why the PR is blocked");
-                    looking_for_response = false;
-                }
+            if looking_for_response && author == user_id && body.starts_with(SIGIL) {
+                log::trace!("Found response to the user asking why the PR is blocked");
+                looking_for_response = false;
             }
             if author != user_id && body.contains(&bot_mention) {
                 log::trace!("Found a comment asking mentioning the bot and asking why it's stuck");
@@ -181,7 +179,7 @@ impl<'a> Analyzer<'a> {
             }
 
             if body.is_empty() {
-                body += "Sorry, I was taking a nice little nap; will get back to work now!\n"
+                body += "Sorry, I was taking a nice little nap; will get back to work now!\n";
             }
 
             actions.post_comment(format!("{SIGIL}\n{body}"));

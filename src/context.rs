@@ -121,20 +121,21 @@ impl Client {
     }
 
     pub(crate) async fn get_bot_nick(&self) -> Result<String> {
-        let mut bot_nick = self.bot_nick.borrow_mut();
-        if let Some(cached) = &*bot_nick {
-            Ok(cached.clone())
-        } else {
-            let nick = self
-                .inner
-                .current()
-                .user()
-                .await
-                .context("Getting the bot user id")?
-                .login;
-            *bot_nick = Some(nick.clone());
-            Ok(nick)
+        {
+            let bot_nick = self.bot_nick.borrow();
+            if let Some(cached) = &*bot_nick {
+                return Ok(cached.clone());
+            }
         }
+        let nick = self
+            .inner
+            .current()
+            .user()
+            .await
+            .context("Getting the bot user id")?
+            .login;
+        *self.bot_nick.borrow_mut() = Some(nick.clone());
+        Ok(nick)
     }
 }
 
