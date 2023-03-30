@@ -24,7 +24,7 @@ enum BlockReason {
     /// The PR has reviewers set, and they haven't given a review yet.
     MissingReviews,
     /// The PR is waiting for a PR approval, and a label requires approvals.
-    MissingReviewApproval,
+    MissingReviewApproval { from_users: Vec<String> },
     /// The CI is not done running yet, or it's failing.
     CiNotPassing,
     /// The PR lacks a description, and a label requires a description.
@@ -70,6 +70,11 @@ impl Pr {
             labels,
         }
     }
+}
+
+enum PrApprovalStatus {
+    Approved,
+    MissingReview { from_users: Vec<String> },
 }
 
 pub struct Analyzer<'a> {
@@ -146,10 +151,14 @@ impl<'a> Analyzer<'a> {
                     BlockReason::MissingReviews => {
                         body += "- Still waiting for requested reviewers to review this.\n";
                     }
-                    BlockReason::MissingReviewApproval => {
+                    BlockReason::MissingReviewApproval { from_users } => {
                         body += "- There are some missing review approvals";
                         if self.config.comment_requests_change {
                             body += " (and comments count as request-changes)";
+                        }
+                        if !from_users.is_empty() {
+                            body += ". Missing reviews from: ";
+                            body += &from_users.join(", ");
                         }
                         body += ".\n";
                     }
@@ -209,14 +218,17 @@ impl<'a> Analyzer<'a> {
         reasons
     }
 
-    async fn analyze_extended_checks(&self, reasons: &mut HashSet<BlockReason>) -> anyhow::Result<()> {
+    async fn analyze_extended_checks(
+        &self,
+        reasons: &mut HashSet<BlockReason>,
+    ) -> anyhow::Result<()> {
         let statuses_passed = self.pr_statuses_passed().await?;
         if !statuses_passed {
             reasons.insert(BlockReason::CiNotPassing);
         }
         let pr_approved = self.pr_approved(self.requires_reviews()).await?;
-        if !pr_approved {
-            reasons.insert(BlockReason::MissingReviewApproval);
+        if let PrApprovalStatus::MissingReview { from_users } = pr_approved {
+            reasons.insert(BlockReason::MissingReviewApproval { from_users });
         }
         Ok(())
     }
@@ -259,7 +271,7 @@ impl<'a> Analyzer<'a> {
                     log::info!("Waiting on reviewers, nothing to do");
                     missing_review = true;
                 }
-                BlockReason::MissingReviewApproval => {
+                BlockReason::MissingReviewApproval { .. } => {
                     log::info!("Still waiting for a review approval");
                     missing_review = true;
                 }
@@ -297,7 +309,7 @@ impl<'a> Analyzer<'a> {
         Ok(actions)
     }
 
-    async fn pr_approved(&self, review_required: bool) -> Result<bool> {
+    async fn pr_approved(&self, review_required: bool) -> Result<PrApprovalStatus> {
         let reviews = self.get_pr_reviews().await?;
         log::debug!(reviews = ?reviews, "Got PR reviews");
 
@@ -315,10 +327,14 @@ impl<'a> Analyzer<'a> {
         let reviews = Reviews::new(self.pr.author.clone(), comment_effect).record_reviews(reviews);
 
         if reviews.approved(review_required) {
-            Ok(true)
+            Ok(PrApprovalStatus::Approved)
         } else {
+            let from_users = reviews.missing_approvals_from_users();
             log::info!("Not yet approved by review");
-            Ok(false)
+            if !from_users.is_empty() {
+                log::info!("\tWaiting for reviews from: {}", from_users.join(", "));
+            }
+            Ok(PrApprovalStatus::MissingReview { from_users })
         }
     }
 
