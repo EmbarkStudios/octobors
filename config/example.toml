@@ -46,6 +46,11 @@ automerge_grace_period = 30
 # "Squash".
 merge_method = "Rebase"
 
+# Optional: Should the bot try to answer comments when it's mentioned, asking for details why it's
+# merged a PR? If set to true, this will cause more requests to the Github APi to fetch comments
+# for each pull request.
+react_to_comments = false
+
 # Optional: With this setting set to true, a "comment" review  counts as if it
 # is requesting changes, even if the user who did it wasn't part of the initial
 # reviewers list. Otherwise, comments have no approval value, and commenting
