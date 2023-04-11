@@ -145,7 +145,13 @@ impl<'a> RepoProcessor<'a> {
             .into_iter()
             .map(|pr| {
                 let span = log::span!(Level::INFO, "pr", number = pr.number);
-                self.process_pr(pr).instrument(span)
+                async move {
+                    let num = pr.number;
+                    match self.process_pr(pr).await {
+                        Ok(()) => Ok(()),
+                        Err(err) => Err(err).with_context(|| format!("pr = {num}")),
+                    }
+                }.instrument(span)
             });
         futures::future::try_join_all(futures).await?;
         Ok(())
