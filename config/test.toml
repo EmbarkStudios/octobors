@@ -1,4 +1,4 @@
-owner = "bnjbvr"
+owner = "davidpdrsn"
 dry_run = false
 
 [[repos]]
@@ -8,6 +8,7 @@ reviewed_label = "reviewed"
 skip_review_label = "trivial"
 needs_description_label = "needs-description"
 block_merge_label = "block-merge"
+error_label = "octobors-error"
 comment_requests_change = true
 react_to_comments = true
 required_statuses = []

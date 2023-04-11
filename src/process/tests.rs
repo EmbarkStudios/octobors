@@ -14,6 +14,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         ci_passed_label: Some("ci-passed".to_string()),
         reviewed_label: Some("reviewed".to_string()),
         block_merge_label: Some("block-merge".to_string()),
+        error_label: Some("octobors-error".to_string()),
         automerge_grace_period: Some(10),
         skip_review_label: None,
         merge_method: context::MergeMethod::Rebase,

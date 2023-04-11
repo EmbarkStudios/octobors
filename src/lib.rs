@@ -154,18 +154,54 @@ impl<'a> RepoProcessor<'a> {
     async fn process_pr(&self, pr: octocrab::models::pulls::PullRequest) -> Result<()> {
         let pr = Pr::from_octocrab_pull_request(pr);
 
-        let actions = Analyzer::new(&pr, self.client, self.repo_config)
-            .required_actions()
-            .await?;
+        let result = async {
+            let actions = Analyzer::new(&pr, self.client, self.repo_config)
+                .required_actions()
+                .await?;
 
-        if self.config.dry_run {
-            log::info!("dry-run {:?}", actions);
-        } else {
-            log::info!("applying {:?}", actions);
-            self.apply(actions, &pr).await?;
+            if self.config.dry_run {
+                log::info!("dry-run {:?}", actions);
+            } else {
+                log::info!("applying {:?}", actions);
+                self.apply(actions, &pr).await?;
+            }
+
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+
+        // if something went wrong, add a label so the author knows to check the logs
+        // we don't post a comment to avoid spamming the PR with comments each time the bot runs
+        {
+            let mut labels = pr.labels.iter().cloned().collect();
+            let client = &self.client;
+            let num = pr.number;
+            let new_labels = self.repo_config.error_label.as_deref().into_iter();
+            match &result {
+                Ok(_) => {
+                    process::remove_labels(
+                        client,
+                        &self.repo_config.name,
+                        num,
+                        &mut labels,
+                        new_labels,
+                    )
+                    .await?;
+                }
+                Err(_) => {
+                    process::add_labels(
+                        client,
+                        &self.repo_config.name,
+                        num,
+                        &mut labels,
+                        new_labels,
+                    )
+                    .await?;
+                }
+            }
         }
 
-        Ok(())
+        result
     }
 
     pub async fn apply(&self, actions: Actions, pr: &Pr) -> Result<()> {
