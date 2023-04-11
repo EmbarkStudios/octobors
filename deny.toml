@@ -55,9 +55,9 @@ multiple-versions = "deny"
 deny = [
 ]
 skip = [
-    { name = "base64", version = "=0.13" },
 ]
 skip-tree = [
+    { name = "base64" },
 ]
 
 [sources]
