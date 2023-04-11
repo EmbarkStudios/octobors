@@ -76,7 +76,7 @@ use tracing as log;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::builder()
@@ -86,6 +86,15 @@ async fn main() -> Result<()> {
         .without_time()
         .init();
 
+    match try_main().await {
+        Ok(()) => {}
+        Err(err) => {
+            log::error!("Something went wrong: {err:#}");
+        }
+    }
+}
+
+async fn try_main() -> Result<()> {
     let app = octobors::Octobors::new(&get_config_path()?)?;
     log::info!("configuration: {:?}", app.config);
     app.process_all().await
