@@ -77,10 +77,9 @@ pub mod process;
 mod review;
 
 use anyhow::{Context, Result};
-use log::Instrument;
 use process::{Actions, Analyzer, Pr};
 use std::path::Path;
-use tracing::{self as log, Level};
+use tracing::{Instrument, Level};
 
 pub struct Octobors {
     pub config: context::Config,
@@ -107,7 +106,7 @@ impl Octobors {
 
     pub async fn process_all(&self) -> Result<()> {
         for repo in self.config.repos.iter() {
-            let span = log::span!(Level::INFO, "repo", name = repo.name.as_str());
+            let span = tracing::span!(Level::INFO, "repo", name = repo.name.as_str());
 
             RepoProcessor::new(&self.config, &self.client, repo)
                 .process()
@@ -144,7 +143,7 @@ impl<'a> RepoProcessor<'a> {
             .await?
             .into_iter()
             .map(|pr| {
-                let span = log::span!(Level::INFO, "pr", number = pr.number);
+                let span = tracing::span!(Level::INFO, "pr", number = pr.number);
                 self.process_pr(pr).instrument(span)
             });
         futures::future::try_join_all(futures).await?;
@@ -159,9 +158,9 @@ impl<'a> RepoProcessor<'a> {
             .await?;
 
         if self.config.dry_run {
-            log::info!("dry-run {:?}", actions);
+            tracing::info!("dry-run {:?}", actions);
         } else {
-            log::info!("applying {:?}", actions);
+            tracing::info!("applying {:?}", actions);
             self.apply(actions, &pr).await?;
         }
 
@@ -192,12 +191,12 @@ impl<'a> RepoProcessor<'a> {
         .await?;
 
         for comment in actions.post_comment {
-            log::debug!("Posting a comment: {comment}");
+            tracing::debug!("Posting a comment: {comment}");
             process::post_comment(client, &self.repo_config.name, num, comment).await?;
         }
 
         if actions.merge {
-            log::info!("Attempting to merge");
+            tracing::info!("Attempting to merge");
             merge::queue(self.client, pr, self.repo_config).await?;
         }
         Ok(())

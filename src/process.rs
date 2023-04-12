@@ -8,7 +8,6 @@ use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
 use models::{pulls::PullRequest, IssueState, StatusState};
 use octocrab::models;
-use tracing as log;
 
 #[cfg(test)]
 mod tests;
@@ -123,11 +122,13 @@ impl<'a> Analyzer<'a> {
             }
         }) {
             if looking_for_response && author == user_id && body.starts_with(SIGIL) {
-                log::trace!("Found response to the user asking why the PR is blocked");
+                tracing::trace!("Found response to the user asking why the PR is blocked");
                 looking_for_response = false;
             }
             if author != user_id && body.contains(&bot_mention) {
-                log::trace!("Found a comment asking mentioning the bot and asking why it's stuck");
+                tracing::trace!(
+                    "Found a comment asking mentioning the bot and asking why it's stuck"
+                );
                 looking_for_response = true;
             }
         }
@@ -258,37 +259,37 @@ impl<'a> Analyzer<'a> {
         for reason in &block_reasons {
             match reason {
                 BlockReason::DraftPr => {
-                    log::info!("Draft, nothing to do");
+                    tracing::info!("Draft, nothing to do");
                     return Ok(actions);
                 }
                 BlockReason::ClosedPr => {
-                    log::info!("Closed, nothing to do");
+                    tracing::info!("Closed, nothing to do");
                     return Ok(actions);
                 }
                 BlockReason::InactivePr => {
-                    log::info!("Inactive for over 60 minutes, nothing to do");
+                    tracing::info!("Inactive for over 60 minutes, nothing to do");
                     return Ok(actions);
                 }
                 BlockReason::MissingReviews => {
-                    log::info!("Waiting on reviewers, nothing to do");
+                    tracing::info!("Waiting on reviewers, nothing to do");
                     missing_review = true;
                 }
                 BlockReason::MissingReviewApproval { .. } => {
-                    log::info!("Still waiting for a review approval");
+                    tracing::info!("Still waiting for a review approval");
                     missing_review = true;
                 }
                 BlockReason::CiNotPassing => {
-                    log::info!("CI not passing yet");
+                    tracing::info!("CI not passing yet");
                     statuses_passed = false;
                 }
                 BlockReason::MissingDescription => {
-                    log::info!("Missing description");
+                    tracing::info!("Missing description");
                 }
                 BlockReason::BlockedByLabel => {
-                    log::info!("Blocked by a block-merge label.");
+                    tracing::info!("Blocked by a block-merge label.");
                 }
                 BlockReason::InsideGracePeriod => {
-                    log::info!("Still inside the grace period");
+                    tracing::info!("Still inside the grace period");
                 }
             }
         }
@@ -313,7 +314,7 @@ impl<'a> Analyzer<'a> {
 
     async fn pr_approved(&self, review_required: bool) -> Result<PrApprovalStatus> {
         let reviews = self.get_pr_reviews().await?;
-        log::debug!(reviews = ?reviews, "Got PR reviews");
+        tracing::debug!(reviews = ?reviews, "Got PR reviews");
 
         let review_required = if review_required {
             Approval::Required
@@ -332,9 +333,9 @@ impl<'a> Analyzer<'a> {
             Ok(PrApprovalStatus::Approved)
         } else {
             let from_users = reviews.missing_approvals_from_users();
-            log::info!("Not yet approved by review");
+            tracing::info!("Not yet approved by review");
             if !from_users.is_empty() {
-                log::info!("\tWaiting for reviews from: {}", from_users.join(", "));
+                tracing::info!("\tWaiting for reviews from: {}", from_users.join(", "));
             }
             Ok(PrApprovalStatus::MissingReview { from_users })
         }
@@ -342,10 +343,10 @@ impl<'a> Analyzer<'a> {
 
     async fn pr_statuses_passed(&self) -> Result<bool> {
         let statuses = self.get_pr_statuses().await?;
-        log::debug!(statuses = ?statuses, "Got PR statuses");
+        tracing::debug!(statuses = ?statuses, "Got PR statuses");
         for required in &self.config.required_statuses {
             if statuses.get(required) != Some(&StatusState::Success) {
-                log::info!("Required status `{}` has not passed", required);
+                tracing::info!("Required status `{}` has not passed", required);
                 return Ok(false);
             }
         }
@@ -358,7 +359,7 @@ impl<'a> Analyzer<'a> {
             .as_ref()
             .map_or(false, |label| {
                 if self.pr.labels.contains(label) {
-                    log::info!("Merge blocked by label");
+                    tracing::info!("Merge blocked by label");
                     true
                 } else {
                     false
@@ -370,7 +371,7 @@ impl<'a> Analyzer<'a> {
         // Either there's a trivial label, and the PR contains it, so reviews are optional.
         if let Some(ref trivial_label) = self.config.skip_review_label {
             if self.pr.labels.contains(trivial_label) {
-                log::info!("Not blocking on reviews because of trivial review label");
+                tracing::info!("Not blocking on reviews because of trivial review label");
                 return false;
             }
         }
@@ -386,7 +387,7 @@ impl<'a> Analyzer<'a> {
                 if Utc::now() - Duration::seconds(*grace_period as i64) > self.pr.updated_at {
                     true
                 } else {
-                    log::info!("Within grace period, not merging");
+                    tracing::info!("Within grace period, not merging");
                     false
                 }
             }
@@ -499,7 +500,7 @@ pub async fn add_labels(
         return Ok(());
     }
 
-    log::debug!("#{}: Adding labels {:?}", pr_number, to_add);
+    tracing::debug!("#{}: Adding labels {:?}", pr_number, to_add);
 
     let ih = client.inner.issues(&client.owner, repo);
 
@@ -538,13 +539,13 @@ pub async fn remove_labels(
         return Ok(());
     }
 
-    log::debug!("#{}: Removing labels {:?}", pr_number, to_remove);
+    tracing::debug!("#{}: Removing labels {:?}", pr_number, to_remove);
 
     let ih = client.inner.issues(&client.owner, repo);
 
     for old_label in to_remove {
         if let Err(e) = ih.remove_label(pr_number, old_label.as_ref()).await {
-            log::debug!("Error removing label '{}': {:#}", old_label.as_ref(), e);
+            tracing::debug!("Error removing label '{}': {:#}", old_label.as_ref(), e);
         }
     }
 
