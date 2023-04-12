@@ -71,18 +71,13 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{Context as _, Result};
-use tracing::metadata::LevelFilter;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
-        .without_time()
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "octobors=debug".into()))
+        .with(tracing_logfmt::layer())
         .init();
 
     match try_main().await {
