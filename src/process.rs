@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{Context as _, Error, Result};
 use chrono::{DateTime, Duration, Utc};
 use models::{pulls::PullRequest, IssueState, StatusState};
-use octocrab::models;
+use octocrab::models::{self};
 use tracing as log;
 
 #[cfg(test)]
@@ -31,6 +31,8 @@ enum BlockReason {
     MissingDescription,
     /// The merge is blocked by a label.
     BlockedByLabel,
+    /// The merge is blocked to prevent accidental graphite merge.
+    BlockProtectionGraphite,
     /// The PR is inside a grace period.
     InsideGracePeriod,
 }
@@ -86,17 +88,27 @@ pub struct Analyzer<'a> {
     // API in unit tests
     reviews: RemoteData<Vec<Review>>,
     statuses: RemoteData<HashMap<String, StatusState>>,
+    pr_comments: Vec<octocrab::models::issues::Comment>,
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn new(pr: &'a Pr, client: &'a context::Client, config: &'a context::RepoConfig) -> Self {
-        Self {
+    pub async fn new(
+        pr: &'a Pr,
+        client: &'a context::Client,
+        config: &'a context::RepoConfig,
+    ) -> anyhow::Result<Analyzer<'a>> {
+        let pr_comments = client
+            .get_pull_request_comments(config.name.as_str(), pr.number)
+            .await?;
+
+        Ok(Self {
             pr,
             client,
             config,
             reviews: RemoteData::Remote,
             statuses: RemoteData::Remote,
-        }
+            pr_comments,
+        })
     }
 
     async fn analyze_comments(
@@ -109,13 +121,9 @@ impl<'a> Analyzer<'a> {
         let user_id = self.client.get_bot_nick().await?;
         let bot_mention = format!("@{user_id}");
 
-        let pr_comments = self
-            .client
-            .get_pull_request_comments(self.config.name.as_str(), self.pr.number)
-            .await?;
         let mut looking_for_response = false;
 
-        for (author, body) in pr_comments.into_iter().filter_map(|comment| {
+        for (author, body) in self.pr_comments.clone().into_iter().filter_map(|comment| {
             if let Some(body) = comment.body {
                 Some((comment.user.login, body))
             } else {
@@ -176,6 +184,13 @@ impl<'a> Analyzer<'a> {
                             self.config.block_merge_label.as_ref().unwrap()
                         );
                     }
+                    BlockReason::BlockProtectionGraphite => {
+                        body += &format!(
+                            "- This PR is blocked by the '{}' label.\nThis label is added to protect the graphite stack from being automatically merged with dowstack PR's.\nIt is preferred to merge the stack from downstream to upstream branches.\nAnd manually rebase and push branches when downstack branches get merged.\nIf rebased on main, then you should remove the '{}' label.\n",
+                            self.config.block_merge_label.as_ref().unwrap(),
+                            self.config.block_merge_label.as_ref().unwrap()
+                        );
+                    }
                     BlockReason::InsideGracePeriod => {
                         body += "- In grace period; I'll retry in a bit.\n";
                     }
@@ -192,7 +207,7 @@ impl<'a> Analyzer<'a> {
         Ok(())
     }
 
-    fn analyze_basic_checks(&self) -> HashSet<BlockReason> {
+    async fn analyze_basic_checks(&self) -> HashSet<BlockReason> {
         let mut reasons = HashSet::new();
         let pr = &self.pr;
         if pr.draft {
@@ -211,6 +226,14 @@ impl<'a> Analyzer<'a> {
         if self.merge_blocked_by_label() {
             reasons.insert(BlockReason::BlockedByLabel);
         }
+
+        log::info!("Graphite! ");
+
+        if self.merge_blocked_by_graphite().await {
+            log::info!("Graphite blocks!");
+            reasons.insert(BlockReason::BlockProtectionGraphite);
+        }
+
         if self.config.needs_description_label.is_some() && !self.pr.has_description {
             reasons.insert(BlockReason::MissingDescription);
         }
@@ -237,9 +260,11 @@ impl<'a> Analyzer<'a> {
 
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
+        log::info!("Basic checks");
+
         let mut actions = Actions::noop();
 
-        let mut block_reasons = self.analyze_basic_checks();
+        let mut block_reasons = self.analyze_basic_checks().await;
         if self.config.react_to_comments || block_reasons.is_empty() {
             // Now that the basic checks have been passed we can gather information
             // from the GitHub API in order to do the full check. We do this second
@@ -254,6 +279,7 @@ impl<'a> Analyzer<'a> {
 
         let mut missing_review = false;
         let mut statuses_passed = true;
+        let mut graphite_merge_protection: bool = false;
 
         for reason in &block_reasons {
             match reason {
@@ -287,6 +313,10 @@ impl<'a> Analyzer<'a> {
                 BlockReason::BlockedByLabel => {
                     log::info!("Blocked by a block-merge label.");
                 }
+                BlockReason::BlockProtectionGraphite => {
+                    log::warn!("Blocked by graphite block-merge label.");
+                    graphite_merge_protection = true;
+                }
                 BlockReason::InsideGracePeriod => {
                     log::info!("Still inside the grace period");
                 }
@@ -301,8 +331,29 @@ impl<'a> Analyzer<'a> {
         if let Some(label) = &self.config.ci_passed_label {
             actions.set_label(label, Presence::should_be_present(statuses_passed));
         }
+
         if let Some(label) = &self.config.needs_description_label {
             actions.set_label(label, Presence::should_be_present(!self.pr.has_description));
+        }
+
+        if graphite_merge_protection {
+            if let (Some(graphite_label), Some(block_merge_label)) =
+                (&self.config.graphite_label, &self.config.block_merge_label)
+            {
+                let contains_graphite_label = self.pr.labels.contains(graphite_label);
+                let contains_block_merge_label = self.pr.labels.contains(block_merge_label);
+
+                // Only set the block merge label once.
+                if !contains_block_merge_label && !contains_graphite_label {
+                    actions.set_label(block_merge_label, Presence::Present);
+                }
+
+                if !contains_graphite_label {
+                    actions.set_label(graphite_label, Presence::Present);
+                    let comment = format!("To safeguard the graphite branch from automated merges with dowstack pull requests, I have added the `{}` label. Feel free to ping me for more details!", block_merge_label);
+                    actions.post_comment(comment);
+                }
+            }
         }
 
         // Conclude.
@@ -364,6 +415,14 @@ impl<'a> Analyzer<'a> {
                     false
                 }
             })
+    }
+
+    async fn merge_blocked_by_graphite(&self) -> bool {
+        for comment in self.pr_comments.iter().filter_map(|x| x.body.clone()) {
+            return comment.contains("Current dependencies on/for this PR:");
+        }
+
+        false
     }
 
     fn requires_reviews(&self) -> bool {

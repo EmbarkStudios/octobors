@@ -155,6 +155,7 @@ impl<'a> RepoProcessor<'a> {
         let pr = Pr::from_octocrab_pull_request(pr);
 
         let actions = Analyzer::new(&pr, self.client, self.repo_config)
+            .await?
             .required_actions()
             .await?;
 

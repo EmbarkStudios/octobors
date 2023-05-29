@@ -76,7 +76,7 @@ impl Client {
             comments.extend(previous.items);
             page = self.inner.get_page(&previous.next).await?;
         }
-        tracing::info!(?comments, "comments we got from github api");
+        //tracing::info!(?comments, "comments we got from github api");
         Ok(comments)
     }
 
@@ -132,6 +132,7 @@ impl Client {
             .await
             .context("Getting the bot user id")?
             .login;
+        tracing::error!("{}", nick);
         *self.bot_nick.borrow_mut() = Some(nick.clone());
         Ok(nick)
     }
@@ -206,6 +207,9 @@ pub struct RepoConfig {
 
     /// Label that can be manually added to PRs to block automerge
     pub block_merge_label: Option<String>,
+
+    /// Label that can be manually added to PRs to block automerge
+    pub graphite_label: Option<String>,
 
     /// The period in seconds between when a PR can be automerged, and when
     /// the action actually tries to perform the merge
