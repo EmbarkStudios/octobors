@@ -19,6 +19,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         merge_method: context::MergeMethod::Rebase,
         comment_requests_change: false,
         react_to_comments: false,
+        graphite_label: None,
     };
 
     let pr = Pr {
@@ -37,12 +38,12 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
     (pr, client, config)
 }
 
-fn make_analyzer<'a>(
+async fn make_analyzer<'a>(
     pr: &'a Pr,
     client: &'a context::Client,
     config: &'a context::RepoConfig,
 ) -> Analyzer<'a> {
-    let mut analyzer = Analyzer::new(pr, client, config);
+    let mut analyzer = Analyzer::new(pr, client, config).await.unwrap();
     analyzer.reviews = RemoteData::Local(vec![
         review("1", ReviewState::Commented),
         review("2", ReviewState::Approved),
@@ -62,7 +63,7 @@ fn make_analyzer<'a>(
 #[tokio::test]
 async fn ok_pr_actions() {
     let (pr, client, config) = make_context();
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
@@ -78,7 +79,7 @@ async fn merge_blocked_by_label() {
     let (mut pr, client, mut config) = make_context();
     config.block_merge_label = Some("blocked!".to_string());
     pr.labels.insert("blocked!".to_string());
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
@@ -100,7 +101,7 @@ async fn trivial_merge_not_blocked_on_pending_reviews() {
     // But a few reviews are pending
     pr.requested_reviewers_remaining = 42;
 
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
 
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
@@ -123,7 +124,7 @@ async fn trivial_merge_blocked_on_requested_changes() {
     // But a few reviews are pending
     pr.requested_reviewers_remaining = 41;
 
-    let mut analyzer = make_analyzer(&pr, &client, &config);
+    let mut analyzer = make_analyzer(&pr, &client, &config).await;
 
     // But one reviewer was like meh
     analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::ChangesRequested)]);
@@ -149,7 +150,7 @@ async fn trivial_merge_with_approval() {
     // But a few reviews are pending
     pr.requested_reviewers_remaining = 41;
 
-    let mut analyzer = make_analyzer(&pr, &client, &config);
+    let mut analyzer = make_analyzer(&pr, &client, &config).await;
 
     // But one reviewer was satisfied
     analyzer.reviews = RemoteData::Local(vec![review("1", ReviewState::Approved)]);
@@ -168,7 +169,7 @@ async fn trivial_merge_with_approval() {
 async fn draft_pr_actions() {
     let (mut pr, client, config) = make_context();
     pr.draft = true;
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(analyzer.required_actions().await.unwrap(), Actions::noop());
 }
 
@@ -176,7 +177,7 @@ async fn draft_pr_actions() {
 async fn closed_pr_actions() {
     let (mut pr, client, config) = make_context();
     pr.state = IssueState::Closed;
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(analyzer.required_actions().await.unwrap(), Actions::noop());
 }
 
@@ -184,7 +185,7 @@ async fn closed_pr_actions() {
 async fn stale_pr_actions() {
     let (mut pr, client, config) = make_context();
     pr.updated_at = Utc::now() - Duration::minutes(61);
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(analyzer.required_actions().await.unwrap(), Actions::noop());
 }
 
@@ -192,7 +193,7 @@ async fn stale_pr_actions() {
 async fn no_description_pr_actions() {
     let (mut pr, client, config) = make_context();
     pr.has_description = false;
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
@@ -208,7 +209,7 @@ async fn no_description_none_required_pr_actions() {
     let (mut pr, client, mut config) = make_context();
     config.needs_description_label = None;
     pr.has_description = false;
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
@@ -226,7 +227,7 @@ async fn review_not_required_if_label_not_configured() {
     async fn assert_approved(approved: bool, cases: Vec<Review>) {
         let (pr, client, mut config) = make_context();
         config.reviewed_label = None;
-        let mut analyzer = make_analyzer(&pr, &client, &config);
+        let mut analyzer = make_analyzer(&pr, &client, &config).await;
         analyzer.reviews = RemoteData::Local(cases);
         assert_eq!(
             analyzer.required_actions().await.unwrap(),
@@ -247,7 +248,7 @@ async fn review_not_required_if_label_not_configured() {
 async fn changes_requested_still_blocks_if_label_not_configured() {
     let (pr, client, mut config) = make_context();
     config.reviewed_label = None;
-    let mut analyzer = make_analyzer(&pr, &client, &config);
+    let mut analyzer = make_analyzer(&pr, &client, &config).await;
     analyzer.reviews = RemoteData::Local(vec![Review {
         user_name: "me".to_string(),
         state: ReviewState::ChangesRequested,
@@ -265,7 +266,7 @@ async fn changes_requested_still_blocks_if_label_not_configured() {
 async fn no_ci_passed_label() {
     let (pr, client, mut config) = make_context();
     config.ci_passed_label = None;
-    let analyzer = make_analyzer(&pr, &client, &config);
+    let analyzer = make_analyzer(&pr, &client, &config).await;
     assert_eq!(
         analyzer.required_actions().await.unwrap(),
         *Actions::noop()
@@ -281,7 +282,7 @@ async fn required_ci_not_passed_pr_actions() {
         ($cases:expr) => {{
             let (pr, client, mut config) = make_context();
             config.required_statuses = vec!["required1".to_string(), "required2".to_string()];
-            let mut analyzer = make_analyzer(&pr, &client, &config);
+            let mut analyzer = make_analyzer(&pr, &client, &config).await;
             analyzer.statuses = RemoteData::Local(
                 $cases
                     .into_iter()
@@ -362,7 +363,7 @@ async fn review_approval_pr_actions() {
     macro_rules! assert_approved {
         ($approved:expr, $cases:expr) => {{
             let (pr, client, config) = make_context();
-            let mut analyzer = make_analyzer(&pr, &client, &config);
+            let mut analyzer = make_analyzer(&pr, &client, &config).await;
             analyzer.reviews = RemoteData::Local($cases);
             assert_eq!(
                 analyzer.required_actions().await.unwrap(),
@@ -424,7 +425,7 @@ async fn grace_period_prevents_merge() {
             let (mut pr, client, mut config) = make_context();
             config.automerge_grace_period = $grace_period;
             pr.updated_at = Utc::now() - Duration::seconds($updated_seconds_ago);
-            let analyzer = make_analyzer(&pr, &client, &config);
+            let analyzer = make_analyzer(&pr, &client, &config).await;
             assert_eq!(
                 analyzer.required_actions().await.unwrap(),
                 *Actions::noop()
@@ -453,7 +454,7 @@ async fn requested_reviews() {
         ($requested_reviewers:expr, $merge:expr) => {{
             let (mut pr, client, config) = make_context();
             pr.requested_reviewers_remaining = $requested_reviewers;
-            let analyzer = make_analyzer(&pr, &client, &config);
+            let analyzer = make_analyzer(&pr, &client, &config).await;
             assert_eq!(
                 analyzer.required_actions().await.unwrap().merge,
                 Actions::noop().set_merge($merge).merge
