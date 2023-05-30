@@ -414,11 +414,7 @@ impl<'a> Analyzer<'a> {
 
     fn merge_blocked_by_graphite(&self) -> bool {
         let mut is_graphite_comment = false;
-        for comment in self
-            .pr_comments
-            .iter()
-            .filter_map(|x| x.body.clone())
-        {
+        for comment in self.pr_comments.iter().filter_map(|x| x.body.clone()) {
             is_graphite_comment |= comment.contains("Current dependencies on/for this PR:");
         }
 
