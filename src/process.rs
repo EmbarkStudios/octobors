@@ -413,16 +413,16 @@ impl<'a> Analyzer<'a> {
     }
 
     fn merge_blocked_by_graphite(&self) -> bool {
+        let mut is_graphite_comment = false;
         for comment in self
             .pr_comments
             .iter()
             .filter_map(|x| x.body.clone())
-            .collect::<Vec<_>>()
         {
-            return comment.contains("Current dependencies on/for this PR:");
+            is_graphite_comment |= comment.contains("Current dependencies on/for this PR:");
         }
 
-        false
+        is_graphite_comment
     }
 
     fn requires_reviews(&self) -> bool {
