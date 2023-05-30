@@ -76,7 +76,7 @@ impl Client {
             comments.extend(previous.items);
             page = self.inner.get_page(&previous.next).await?;
         }
-        //tracing::info!(?comments, "comments we got from github api");
+        tracing::info!(?comments, "comments we got from github api");
         Ok(comments)
     }
 
@@ -132,7 +132,7 @@ impl Client {
             .await
             .context("Getting the bot user id")?
             .login;
-        tracing::error!("{}", nick);
+
         *self.bot_nick.borrow_mut() = Some(nick.clone());
         Ok(nick)
     }

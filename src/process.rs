@@ -207,7 +207,7 @@ impl<'a> Analyzer<'a> {
         Ok(())
     }
 
-    async fn analyze_basic_checks(&self) -> HashSet<BlockReason> {
+    fn analyze_basic_checks(&self) -> HashSet<BlockReason> {
         let mut reasons = HashSet::new();
         let pr = &self.pr;
         if pr.draft {
@@ -227,10 +227,7 @@ impl<'a> Analyzer<'a> {
             reasons.insert(BlockReason::BlockedByLabel);
         }
 
-        log::info!("Graphite! ");
-
-        if self.merge_blocked_by_graphite().await {
-            log::info!("Graphite blocks!");
+        if self.merge_blocked_by_graphite() {
             reasons.insert(BlockReason::BlockProtectionGraphite);
         }
 
@@ -260,11 +257,9 @@ impl<'a> Analyzer<'a> {
 
     /// Analyze a PR to determine what actions need to be undertaken.
     pub async fn required_actions(&self) -> Result<Actions> {
-        log::info!("Basic checks");
-
         let mut actions = Actions::noop();
 
-        let mut block_reasons = self.analyze_basic_checks().await;
+        let mut block_reasons = self.analyze_basic_checks();
         if self.config.react_to_comments || block_reasons.is_empty() {
             // Now that the basic checks have been passed we can gather information
             // from the GitHub API in order to do the full check. We do this second
@@ -314,7 +309,7 @@ impl<'a> Analyzer<'a> {
                     log::info!("Blocked by a block-merge label.");
                 }
                 BlockReason::BlockProtectionGraphite => {
-                    log::warn!("Blocked by graphite block-merge label.");
+                    log::info!("Blocked by graphite block-merge label.");
                     graphite_merge_protection = true;
                 }
                 BlockReason::InsideGracePeriod => {
@@ -417,8 +412,13 @@ impl<'a> Analyzer<'a> {
             })
     }
 
-    async fn merge_blocked_by_graphite(&self) -> bool {
-        for comment in self.pr_comments.iter().filter_map(|x| x.body.clone()) {
+    fn merge_blocked_by_graphite(&self) -> bool {
+        for comment in self
+            .pr_comments
+            .iter()
+            .filter_map(|x| x.body.clone())
+            .collect::<Vec<_>>()
+        {
             return comment.contains("Current dependencies on/for this PR:");
         }
 
