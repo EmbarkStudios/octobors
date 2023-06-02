@@ -66,7 +66,7 @@ impl Pr {
             state: pr.state,
             updated_at: pr.updated_at.unwrap_or(pr.created_at),
             has_description: pr.body.unwrap_or_default() != "",
-            requested_reviewers_remaining: pr.requested_reviewers.len(),
+            requested_reviewers_remaining: pr.requested_reviewers.len() + pr.requested_teams.len(),
             labels,
         }
     }
