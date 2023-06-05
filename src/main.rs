@@ -71,25 +71,19 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{Context as _, Result};
-use log::metadata::LevelFilter;
-use tracing as log;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
-        .without_time()
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "octobors=debug".into()))
+        .with(tracing_logfmt::layer())
         .init();
 
     match try_main().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            log::error!("Something went wrong: {err:#}");
+            tracing::error!("Something went wrong: {err:#}");
             ExitCode::FAILURE
         }
     }
@@ -97,7 +91,7 @@ async fn main() -> ExitCode {
 
 async fn try_main() -> Result<()> {
     let app = octobors::Octobors::new(&get_config_path()?)?;
-    log::info!("configuration: {:?}", app.config);
+    tracing::info!("configuration: {:?}", app.config);
     app.process_all().await
 }
 

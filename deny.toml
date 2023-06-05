@@ -55,6 +55,7 @@ multiple-versions = "deny"
 deny = [
 ]
 skip = [
+    { name = "time", version = "0.1.45" },
 ]
 skip-tree = [
     { name = "base64" },
