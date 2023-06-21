@@ -64,6 +64,7 @@ skip-tree = [
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = [
+    "https://github.com/EmbarkStudios/octocrab",
 ]
 
 [sources.allow-org]
