@@ -28,5 +28,5 @@ futures = "0.3.12"
 [patch.crates-io]
 # Patch to add a rustls feature. Also includes the latest from octocrab, which
 # includes a bump of reqwest which allows us to use tokio 1.0
-#octocrab = { git = "https://github.com/EmbarkStudios/octocrab", rev = "e662d8e" }
+octocrab = { git = "https://github.com/EmbarkStudios/octocrab", rev = "9f3485382265b" }
 #octocrab = { path = "../octocrab" }
