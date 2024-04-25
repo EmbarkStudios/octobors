@@ -109,12 +109,15 @@ pub async fn queue(
                     MergeableState::Clean | MergeableState::HasHooks | MergeableState::Unstable => {
                         let merge = prh
                             .merge(pr_number)
-                            .title(format!("{} (#{})", pr.title, pr_number))
+                            .title(format!("{} (#{})", pr.title.unwrap_or_default(), pr_number))
                             .sha(pr.head.sha)
                             .method(config.merge_method)
                             .message(match pr.body {
-                                Some(body) => format_commit_message(body, pr.html_url.to_string()),
-                                None => pr.html_url.to_string(),
+                                Some(body) => format_commit_message(
+                                    body,
+                                    pr.html_url.map(|url| url.to_string()).unwrap_or_default(),
+                                ),
+                                None => pr.html_url.map(|url| url.to_string()).unwrap_or_default(),
                             });
 
                         match merge.send().await {

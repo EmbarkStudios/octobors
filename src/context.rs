@@ -20,8 +20,8 @@ impl Client {
         extra_headers: &[(String, String)],
     ) -> Result<Self> {
         let mut builder = octocrab::OctocrabBuilder::new();
-        if let Some(base_url) = github_api_base {
-            builder = builder.base_url(base_url)?;
+        if let Some(base_uri) = github_api_base {
+            builder = builder.base_uri(base_uri)?;
         };
         for (key, value) in extra_headers {
             let name = HeaderName::from_lowercase(key.to_lowercase().as_bytes())?;
@@ -91,6 +91,7 @@ impl Client {
             .inner
             .pulls(&self.owner, repo)
             .list_reviews(pr_number)
+            .send()
             .await
             .context("Could not get reviews for PR")?;
         let mut page = Some(page);

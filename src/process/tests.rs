@@ -27,7 +27,7 @@ fn make_context() -> (Pr, context::Client, context::RepoConfig) {
         number: 1,
         commit_sha: "somesha".to_string(),
         draft: false,
-        state: models::IssueState::Open,
+        state: Some(models::IssueState::Open),
         updated_at: Utc::now() - Duration::seconds(50),
         labels: HashSet::new(),
         has_description: true,
@@ -175,7 +175,7 @@ async fn draft_pr_actions() {
 #[tokio::test]
 async fn closed_pr_actions() {
     let (mut pr, client, config) = make_context();
-    pr.state = IssueState::Closed;
+    pr.state = Some(IssueState::Closed);
     let analyzer = make_analyzer(&pr, &client, &config);
     assert_eq!(analyzer.required_actions().await.unwrap(), Actions::noop());
 }
