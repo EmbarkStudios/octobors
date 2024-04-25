@@ -42,7 +42,7 @@ pub struct Pr {
     pub number: u64,
     pub commit_sha: String,
     pub draft: bool,
-    pub state: models::IssueState,
+    pub state: Option<models::IssueState>,
     pub updated_at: DateTime<Utc>,
     pub labels: HashSet<String>,
     pub has_description: bool,
@@ -59,14 +59,18 @@ impl Pr {
             .collect();
         Self {
             id: *pr.id,
-            author: pr.user.login,
+            author: pr.user.map(|u| u.login).unwrap_or_default(),
             number: pr.number,
             commit_sha: pr.head.sha,
-            draft: pr.draft,
+            draft: pr.draft.unwrap_or_default(),
             state: pr.state,
-            updated_at: pr.updated_at.unwrap_or(pr.created_at),
+            updated_at: pr.updated_at.unwrap_or(pr.created_at.unwrap_or_default()),
             has_description: pr.body.unwrap_or_default() != "",
-            requested_reviewers_remaining: pr.requested_reviewers.len() + pr.requested_teams.len(),
+            requested_reviewers_remaining: pr
+                .requested_reviewers
+                .map(|rr| rr.len())
+                .unwrap_or_default()
+                + pr.requested_teams.map(|rt| rt.len()).unwrap_or_default(),
             labels,
         }
     }
@@ -198,7 +202,7 @@ impl<'a> Analyzer<'a> {
         if pr.draft {
             reasons.insert(BlockReason::DraftPr);
         }
-        if pr.state == IssueState::Closed {
+        if pr.state == Some(IssueState::Closed) {
             reasons.insert(BlockReason::ClosedPr);
         }
         if pr.updated_at < Utc::now() - Duration::minutes(60) {

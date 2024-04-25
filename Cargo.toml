@@ -12,18 +12,18 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Used for making all of the requests to github
-octocrab = { version = "0.13", default-features = false, features = ["rustls"] }
+octocrab = { version = "0.38", default-features = false, features = ["default-client", "rustls"] }
 http = "*"
 # De/serialization support
 serde = { version = "1.0", features = ["derive"] }
 # TOML support
-toml = "0.5"
+toml = "0.8"
 # Async runtime
-tokio = { version = "1.14", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.17", features = ["macros", "rt-multi-thread"] }
 # Date and time data structures
 chrono = "0.4"
 # Futures combinators
-futures = "0.3.12"
+futures = "0.3"
 
 [patch.crates-io]
 # Patch to add a rustls feature. Also includes the latest from octocrab, which

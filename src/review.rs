@@ -10,7 +10,7 @@ pub struct Review {
 impl Review {
     pub fn from_octocrab_review(review: &octocrab::models::pulls::Review) -> Option<Self> {
         Some(Self {
-            user_name: review.user.login.clone(),
+            user_name: review.user.clone().map(|u| u.login).unwrap_or_default(),
             state: review.state?,
         })
     }
