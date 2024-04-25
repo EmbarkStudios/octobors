@@ -1,21 +1,13 @@
+[graph]
 targets = [
     { triple = "x86_64-unknown-linux-musl" },
 ]
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "deny"
+version = 2
 yanked = "deny"
-notice = "warn"
-ignore = [
-    # Potential Unix segfault with time crate, used by chrono, if setting env
-    # vars in threaded context.
-    # https://github.com/time-rs/time/issues/293
-    "RUSTSEC-2020-0071",
-]
 
 [licenses]
-unlicensed = "deny"
 allow = [
     "Apache-2.0",       # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
     "ISC",              # https://tldrlegal.com/license/-isc-license
@@ -23,17 +15,10 @@ allow = [
     "BSD-3-Clause",     # https://tldrlegal.com/license/bsd-3-clause-license-(revised)
     "Unicode-DFS-2016", # https://spdx.org/licenses/Unicode-DFS-2016.html
 ]
-copyleft = "deny"
 exceptions = [
     # ring uses code from multiple libraries but all with permissive licenses
     # https://tldrlegal.com/license/openssl-license-(openssl)
     { allow = ["ISC", "MIT", "OpenSSL"], name = "ring" },
-
-    # MPL 2.0 is a copyleft license and we HAVE to disclose
-    # the source code of these specific libraries if we do changes to it.
-    # which we do through public forks of the repos if/when we do changes to it.
-    # https://tldrlegal.com/license/mozilla-public-license-2.0-(mpl-2)
-    { allow = ["MPL-2.0"], name = "webpki-roots" },
 ]
 
 [[licenses.clarify]]
@@ -55,6 +40,8 @@ multiple-versions = "deny"
 deny = [
 ]
 skip = [
+    { crate = "regex-syntax@0.6", reason = "regex-automata" },
+    { crate = "regex-automata@0.1.10", reason = "matchers, we should get rid of this somehow" },
 ]
 skip-tree = [
     { name = "base64" },
