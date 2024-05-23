@@ -348,8 +348,13 @@ impl<'a> Analyzer<'a> {
         let statuses = self.get_pr_statuses().await?;
         log::debug!(statuses = ?statuses, "Got PR statuses");
         for required in &self.config.required_statuses {
-            if statuses.get(required) != Some(&StatusState::Success) {
-                log::info!("Required status `{}` has not passed", required);
+            let status = statuses.get(required);
+            if status != Some(&StatusState::Success) {
+                log::info!(
+                    "Required status `{}` has not passed. Status is {:?}",
+                    required,
+                    status
+                );
                 return Ok(false);
             }
         }
