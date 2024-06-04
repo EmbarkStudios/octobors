@@ -110,13 +110,32 @@ impl Client {
         pr: &crate::process::Pr,
     ) -> Result<Vec<models::Status>> {
         let reference = octocrab::params::repos::Reference::Commit(pr.commit_sha.clone());
-        Ok(self
+
+        // This used to be calling `self.inner.repos(&self.owner,repo).combined_status_for_ref(&reference)`
+        // but that does not let us get more statuses then 30 which is a problem in some repos.
+        // The current workaround is to do the same as in `combined_status_for_ref` but with up to 100 statuses
+        // but ideally this would be solved with proper pagination.
+        #[derive(serde::Serialize)]
+        struct PerPage {
+            per_page: Option<u8>,
+        }
+        let route = format!(
+            "/repos/{owner}/{repo}/commits/{reference}/status",
+            owner = self.owner,
+            reference = reference.ref_url(),
+        );
+        let combined_status: octocrab::models::CombinedStatus = self
             .inner
-            .repos(&self.owner, repo)
-            .combined_status_for_ref(&reference)
+            .get(
+                route,
+                Some(&PerPage {
+                    per_page: Some(100),
+                }),
+            )
             .await
-            .context("Could not get statuses for commit")?
-            .statuses)
+            .context("Could not get statuses for commit")?;
+
+        Ok(combined_status.statuses)
     }
 
     pub(crate) async fn get_bot_nick(&self) -> Result<String> {
